@@ -3,6 +3,7 @@
 
 #define EXPECTARG 2
 #define EXITCHAR 0
+#define NOISSUE 1
 
 typedef struct {
 	int value;
@@ -52,19 +53,29 @@ void loop(FILE *inputLoc, int isShell) {
 }
 
 char reader(FILE *inputLoc) {
-	int size = 32;
-    char *string = malloc(size * sizeof(char));
-	int c;
-	int index = 0;
-	int comment = 0;
-	int firstChar = 0;
-	while ((c = fgetc(inputLoc)) != '\n' && c != EOF) {
-		firstChar = (firstChar || (c != ' ' && c != '\t' ) ? 1 : 0);
-		if (!firstChar) continue;
+	int c = fgetc(inputLoc);
+	if (c == '\n') return NOISSUE;
+	if (c == EOF) return EXITCHAR;
+
+	int size = 32, index = 0, comment = 0, firstChar = 0, doubleQuote = 0, extraSpace = 0;
+
+	char *string = malloc(size * sizeof(char));
+
+	do {
 		comment = (c == '@' ? !comment : comment);
-		if (comment || c == '@') continue;
+		firstChar = (firstChar || (c != ' ' && c != '\t' && c != '@' && !comment) ? 1 : 0);
+		if (!firstChar || comment || c == '@') continue;
+
+		doubleQuote = (doubleQuote || c == '"' ? !doubleQuote : doubleQuote);
+		if (!doubleQuote && (c == ' ' || c == '\t')) {
+			c = ' ';
+			if (extraSpace) continue;
+			extraSpace = 1;
+		} else extraSpace = 0;
+
 		string[index] = (char)c;
 		index++;
+
 		if (index + 1 >= size) {
 			size *= 2;
 			char *temp = realloc(string, size * sizeof(char));
@@ -74,11 +85,14 @@ char reader(FILE *inputLoc) {
 			}
 			string = temp;
 		}
-	} 
-	if (c == EOF && index == 0) {
+	} while ((c = fgetc(inputLoc)) != '\n' && c != EOF);
+	
+	if (!firstChar) {
 		free(string);
-		return EXITCHAR;
+		string = NULL;
+		return NOISSUE;
 	}
+
 	string[index] = '\0';
 	char status = lexer(string, index);
 	free(string);
@@ -90,3 +104,5 @@ char lexer (char *string, int len) {
 	printf("-%s-\n", string);
 	return 1;
 }
+
+

@@ -1,0 +1,5 @@
+below is a blank line			@comment at a distance
+
+		text is somewhere
+	hello									
+I used lot of tech@tabs in the end of above line@niques
