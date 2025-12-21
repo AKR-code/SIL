@@ -56,17 +56,16 @@ char reader(FILE *inputLoc) {
 	int c = fgetc(inputLoc);
 	if (c == '\n') return NOISSUE;
 	if (c == EOF) return EXITCHAR;
-
 	int size = 32, index = 0, comment = 0, firstChar = 0, doubleQuote = 0, extraSpace = 0;
 
 	char *string = malloc(size * sizeof(char));
 
 	do {
-		comment = (c == '@' ? !comment : comment);
+		comment = (!doubleQuote && c == '@' ? !comment : comment);
 		firstChar = (firstChar || (c != ' ' && c != '\t' && c != '@' && !comment) ? 1 : 0);
-		if (!firstChar || comment || c == '@') continue;
+		doubleQuote = (c == '"' ? !doubleQuote : doubleQuote);
+		if (!firstChar || (!doubleQuote && (comment || c == '@'))) continue;
 
-		doubleQuote = (doubleQuote || c == '"' ? !doubleQuote : doubleQuote);
 		if (!doubleQuote && (c == ' ' || c == '\t')) {
 			c = ' ';
 			if (extraSpace) continue;
@@ -102,7 +101,5 @@ char reader(FILE *inputLoc) {
 
 char lexer (char *string, int len) {
 	printf("-%s-\n", string);
-	return 1;
+	return NOISSUE;
 }
-
-
