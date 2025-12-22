@@ -2,18 +2,33 @@
 #include<stdlib.h>
 
 #define EXPECTARG 2
-#define EXITCHAR 0
-#define NOISSUE 1
 
 typedef struct {
 	int value;
 	char name[50];
-} VAR; 
+} VAR;
+
+typedef enum {
+	STP, ASN, LET, PUT, GET, CON, FOR, TIL, KIL, 	// Explicit functions
+	DVD, MLT, SUB, ADD,							 	//Explicit arthematic operators
+	EQL, NTE, LES, GRT, LOE, GOE,					//Explicit relational operators
+	AND, ORR, 										//Explicit Short circuit operators
+	MRG, ITS										//Implicit functions
+} TOKVAL;
+
+typedef struct {
+	char pattern[5];
+	int weight;
+} TOKEN;
 
 void aboutTool ();
 void loop (FILE *, int);
-char reader (FILE *);
-char lexer (char *, int);
+char reader (FILE *, VAR *);
+char lexer (char *, VAR *);
+
+/***************************\
+|------------MAIN-----------|
+\***************************/
 
 int main (int argc, char *argv[]) {
 	if (argc > EXPECTARG) {
@@ -37,26 +52,44 @@ int main (int argc, char *argv[]) {
 	loop(inputLoc, !(argc - 1));
 }
 
+/***************************\
+|--------ABOUT_TOOL-_-------|
+\***************************/
+
 void aboutTool () {
 	printf("SIL V0.1\n");
 	printf("this is a prototype for LAMDA\n");
 	return;
 }
 
+/***************************\
+|-----------LOOP------------|
+\***************************/
+
+#define EXITCHAR 0
+#define NOISSUE 1
+
 void loop(FILE *inputLoc, int isShell) {
 	char status = EXITCHAR;
 	VAR *varTable = NULL;
 	do {
 		if (isShell) printf("SIL: ");
-		status = reader(inputLoc);
+		status = reader(inputLoc, varTable);
 	} while (status != EXITCHAR);
 }
 
-char reader(FILE *inputLoc) {
+/***************************\
+|----------READER-----------|
+\***************************/
+
+#define INIT_BUFF_SIZE 64
+#define GROWTH_FACTOR 2
+
+char reader(FILE *inputLoc, VAR *varTable) {
 	int c = fgetc(inputLoc);
 	if (c == '\n') return NOISSUE;
 	if (c == EOF) return EXITCHAR;
-	int size = 32, index = 0, comment = 0, firstChar = 0, doubleQuote = 0, extraSpace = 0;
+	int size = INIT_BUFF_SIZE, index = 0, comment = 0, firstChar = 0, doubleQuote = 0, extraSpace = 0, braceDepth = 0;
 
 	char *string = malloc(size * sizeof(char));
 
@@ -64,19 +97,23 @@ char reader(FILE *inputLoc) {
 		comment = (!doubleQuote && c == '@' ? !comment : comment);
 		firstChar = (firstChar || (c != ' ' && c != '\t' && c != '@' && !comment) ? 1 : 0);
 		doubleQuote = (c == '"' ? !doubleQuote : doubleQuote);
-		if (!firstChar || (!doubleQuote && (comment || c == '@'))) continue;
+		if (!firstChar || (!doubleQuote && (comment || c == '@'))) goto NEXT_CHAR;
 
 		if (!doubleQuote && (c == ' ' || c == '\t')) {
 			c = ' ';
-			if (extraSpace) continue;
+			if (extraSpace) goto NEXT_CHAR;
 			extraSpace = 1;
 		} else extraSpace = 0;
+
+		if (!doubleQuote && c == '{') braceDepth++;
+		if (!doubleQuote && c == '}') braceDepth--;
+		c = (c == '\n' && braceDepth ? ',' : c);
 
 		string[index] = (char)c;
 		index++;
 
 		if (index + 1 >= size) {
-			size *= 2;
+			size *= GROWTH_FACTOR;
 			char *temp = realloc(string, size * sizeof(char));
 			if (!temp) {
 				free(string);
@@ -84,7 +121,11 @@ char reader(FILE *inputLoc) {
 			}
 			string = temp;
 		}
-	} while ((c = fgetc(inputLoc)) != '\n' && c != EOF);
+
+NEXT_CHAR:
+		c = fgetc(inputLoc);
+		c = (c == '\n' && braceDepth ? ',' : c);
+	} while (c != '\n' && c != EOF);
 	
 	if (!firstChar) {
 		free(string);
@@ -93,13 +134,17 @@ char reader(FILE *inputLoc) {
 	}
 
 	string[index] = '\0';
-	char status = lexer(string, index);
+	char status = lexer(string, varTable);
 	free(string);
 	string = NULL;
 	return status;
 }
 
-char lexer (char *string, int len) {
+/***************************\
+|-----------LEXER-----------|
+\***************************/
+
+char lexer (char *string, VAR *varTable) {
 	printf("-%s-\n", string);
 	return NOISSUE;
 }
