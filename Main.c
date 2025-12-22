@@ -1,5 +1,6 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include<string.h>
 
 #define EXPECTARG 2
 
@@ -13,18 +14,37 @@ typedef enum {
 	DVD, MLT, SUB, ADD,							 	//Explicit arthematic operators
 	EQL, NTE, LES, GRT, LOE, GOE,					//Explicit relational operators
 	AND, ORR, 										//Explicit Short circuit operators
-	MRG, ITS										//Implicit functions
-} TOKVAL;
+	MRG, ITS,										//Implicit functions
+	TOTAL_TOKENS
+} TOKEN_VAL;
 
 typedef struct {
 	char pattern[5];
 	int weight;
 } TOKEN;
 
+typedef struct {
+	TOKEN_VAL token;
+	int weight;
+	int load;
+	int strStart;
+	int strEnd;
+	int *var;
+} TOKEN_ARR;
+
+typedef struct {
+	VAR *varTable;		//pointer to symbol table for storing user created variables
+	TOKEN *tokenTable;	//pointer to predefined array of tokens and thier properties like pattern for matching and weight
+	char *string;		//pointer to buffer, where string read from file is stored
+	TOKEN_ARR *tokenArr;//lexer generated array which stores tokens and references for parsing and executing
+} PSTAT;
+
 void aboutTool ();
 void loop (FILE *, int);
-char reader (FILE *, VAR *);
-char lexer (char *, VAR *);
+char reader (FILE *, PSTAT *);
+char lexer (PSTAT *);
+PSTAT *setupEnvironment ();
+void clearEnvironment (PSTAT *);
 
 /***************************\
 |------------MAIN-----------|
@@ -71,11 +91,43 @@ void aboutTool () {
 
 void loop(FILE *inputLoc, int isShell) {
 	char status = EXITCHAR;
-	VAR *varTable = NULL;
+	PSTAT *info = setupEnvironment(); 
 	do {
 		if (isShell) printf("SIL: ");
-		status = reader(inputLoc, varTable);
+		status = reader(inputLoc, info);
 	} while (status != EXITCHAR);
+	clearEnvironment(info); 
+}
+
+/*************************\
+|----setupEnvironment-----|
+\*************************/
+
+PSTAT *setupEnvironment() {
+	PSTAT *info = malloc(sizeof(PSTAT));
+	if (info == NULL) return NULL;
+	info->varTable = NULL;
+	TOKEN tokenTableTmp[TOTAL_TOKENS] = {
+		{"ext", 0}, {"=", 20}, {"let ", 10}, {"put ", 10}, {"get ", 10}, {"con ", 10}, {"for ", 10}, {"til ", 10}, {"kil ", 10},//functions
+		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70},//arthematic operators
+		{"==", 55}, {"!=", 55}, {"<", 50}, {">", 50}, {"<=", 50}, {">=", 50},//relational operators
+		{"&", 40}, {"|", 30}//shortcircuit operators
+	};
+	info->tokenTable = tokenTableTmp;
+	info->string = NULL;
+	info->tokenArr = NULL;
+	return info;
+}
+
+/************************\
+|----clearEnvironment----|
+\************************/
+
+void clearEnvironment(PSTAT *info) {
+	free(info->varTable);
+	free(info->string);
+	free(info->tokenArr);
+	free(info);
 }
 
 /***************************\
@@ -85,13 +137,14 @@ void loop(FILE *inputLoc, int isShell) {
 #define INIT_BUFF_SIZE 64
 #define GROWTH_FACTOR 2
 
-char reader(FILE *inputLoc, VAR *varTable) {
+char reader(FILE *inputLoc, PSTAT *info) {	
 	int c = fgetc(inputLoc);
-	if (c == '\n') return NOISSUE;
-	if (c == EOF) return EXITCHAR;
-	int size = INIT_BUFF_SIZE, index = 0, comment = 0, firstChar = 0, doubleQuote = 0, extraSpace = 0, braceDepth = 0;
+	if (c == EOF) return EXITCHAR; 
 
-	char *string = malloc(size * sizeof(char));
+	int size = INIT_BUFF_SIZE, index = 0, comment = 0, firstChar = 0, doubleQuote = 0, extraSpace = 0, braceDepth = 0;
+	char *temp = realloc(info->string, size * sizeof(char));
+	if (temp == NULL) return EXITCHAR;
+	info->string = temp;
 
 	do {
 		comment = (!doubleQuote && c == '@' ? !comment : comment);
@@ -109,34 +162,24 @@ char reader(FILE *inputLoc, VAR *varTable) {
 		if (!doubleQuote && c == '}') braceDepth--;
 		c = (c == '\n' && braceDepth ? ',' : c);
 
-		string[index] = (char)c;
+		info->string[index] = (char)c;
 		index++;
 
 		if (index + 1 >= size) {
 			size *= GROWTH_FACTOR;
-			char *temp = realloc(string, size * sizeof(char));
-			if (!temp) {
-				free(string);
-				return EXITCHAR;
-			}
-			string = temp;
+			char *temp = realloc(info->string, size * sizeof(char));
+			if (!temp) return EXITCHAR;
+			info->string = temp;
 		}
 
 NEXT_CHAR:
 		c = fgetc(inputLoc);
 		c = (c == '\n' && braceDepth ? ',' : c);
 	} while (c != '\n' && c != EOF);
-	
-	if (!firstChar) {
-		free(string);
-		string = NULL;
-		return NOISSUE;
-	}
+	if (!firstChar) return NOISSUE;
 
-	string[index] = '\0';
-	char status = lexer(string, varTable);
-	free(string);
-	string = NULL;
+	info->string[index] = '\0';
+	char status = lexer(info);
 	return status;
 }
 
@@ -144,7 +187,7 @@ NEXT_CHAR:
 |-----------LEXER-----------|
 \***************************/
 
-char lexer (char *string, VAR *varTable) {
-	printf("-%s-\n", string);
+char lexer (PSTAT *info) {
+	printf("-%s-\n", info->string);
 	return NOISSUE;
 }
