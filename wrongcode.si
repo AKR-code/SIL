@@ -1,0 +1,7 @@
+letx
+let y
+get x
+put ["hello world"];
+x > y {
+	put ["this is good"]
+}

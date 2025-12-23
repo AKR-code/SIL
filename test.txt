@@ -5,13 +5,13 @@ let x
 let y
 get x @I can put comments anywhere@
 ge@even in middle of code@t y
-x > y { @I can put comments anywhere@
+x>y{ @I can put comments anywhere@
 	x == 10 {
 		put["this is a fake brace }"]
 	}
 	put[x" is greater than "y]
-} y > x {
+}y>x{
 	put[y" is greater than "x]
-} {
+}{
 	put[x" both are equal "y]
 }

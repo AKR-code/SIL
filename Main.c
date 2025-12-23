@@ -3,18 +3,19 @@
 #include<string.h>
 
 #define EXPECTARG 2
-
+#define VAR_LENGTH 15
 typedef struct {
 	int value;
-	char name[50];
+	char name[15];
 } VAR;
 
 typedef enum {
-	STP, ASN, LET, PUT, GET, CON, FOR, TIL, KIL, 	// Explicit functions
+	STP, KIL, LET, PUT, GET, CON, FOR, TIL, ASN, 	// Explicit functions
 	DVD, MLT, SUB, ADD,							 	//Explicit arthematic operators
 	EQL, NTE, LES, GRT, LOE, GOE,					//Explicit relational operators
 	AND, ORR, 										//Explicit Short circuit operators
 	MRG, ITS,										//Implicit functions
+	VARIABLE,
 	TOTAL_TOKENS
 } TOKEN_VAL;
 
@@ -27,24 +28,26 @@ typedef struct {
 	TOKEN_VAL token;
 	int weight;
 	int load;
-	int strStart;
-	int strEnd;
-	int *var;
+	char *stringBuffer;
+	VAR *var;
 } TOKEN_ARR;
 
 typedef struct {
 	VAR *varTable;		//pointer to symbol table for storing user created variables
-	TOKEN *tokenTable;	//pointer to predefined array of tokens and thier properties like pattern for matching and weight
 	char *string;		//pointer to buffer, where string read from file is stored
 	TOKEN_ARR *tokenArr;//lexer generated array which stores tokens and references for parsing and executing
+	int noOfVars;
+	int lineNum;
 } PSTAT;
 
 void aboutTool ();
 void loop (FILE *, int);
 char reader (FILE *, PSTAT *);
 char lexer (PSTAT *);
+char parser (PSTAT *);
 PSTAT *setupEnvironment ();
 void clearEnvironment (PSTAT *);
+void printError ();
 
 /***************************\
 |------------MAIN-----------|
@@ -107,15 +110,10 @@ PSTAT *setupEnvironment() {
 	PSTAT *info = malloc(sizeof(PSTAT));
 	if (info == NULL) return NULL;
 	info->varTable = NULL;
-	TOKEN tokenTableTmp[TOTAL_TOKENS] = {
-		{"ext", 0}, {"=", 20}, {"let ", 10}, {"put ", 10}, {"get ", 10}, {"con ", 10}, {"for ", 10}, {"til ", 10}, {"kil ", 10},//functions
-		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70},//arthematic operators
-		{"==", 55}, {"!=", 55}, {"<", 50}, {">", 50}, {"<=", 50}, {">=", 50},//relational operators
-		{"&", 40}, {"|", 30}//shortcircuit operators
-	};
-	info->tokenTable = tokenTableTmp;
 	info->string = NULL;
 	info->tokenArr = NULL;
+	info->noOfVars = 0;
+	info->lineNum = 0;
 	return info;
 }
 
@@ -160,7 +158,7 @@ char reader(FILE *inputLoc, PSTAT *info) {
 
 		if (!doubleQuote && c == '{') braceDepth++;
 		if (!doubleQuote && c == '}') braceDepth--;
-		c = (c == '\n' && braceDepth ? ',' : c);
+		c = (c == '\n' && braceDepth ? ';' : c);
 
 		info->string[index] = (char)c;
 		index++;
@@ -174,7 +172,7 @@ char reader(FILE *inputLoc, PSTAT *info) {
 
 NEXT_CHAR:
 		c = fgetc(inputLoc);
-		c = (c == '\n' && braceDepth ? ',' : c);
+		c = (c == '\n' && braceDepth ? ';' : c);
 	} while (c != '\n' && c != EOF);
 	if (!firstChar) return NOISSUE;
 
@@ -183,11 +181,106 @@ NEXT_CHAR:
 	return status;
 }
 
+#undef INIT_BUFF_SIZE 
+
 /***************************\
 |-----------LEXER-----------|
 \***************************/
 
+#define INIT_BUFF_SIZE 32
+#define INIT_STRING_SIZE 64
 char lexer (PSTAT *info) {
-	printf("-%s-\n", info->string);
-	return NOISSUE;
+
+	TOKEN tokenTable[TOTAL_TOKENS] = {
+		{"stop", 0}, {"kill", 10}, {"let", 10}, {"put", 10}, {"get", 10}, {"if", 10}, {"for", 10}, {"till", 10}, {"=", 20},//functions
+		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70},//arthematic operators
+		{"==", 55}, {"!=", 55}, {"<", 50}, {">", 50}, {"<=", 50}, {">=", 50},//relational operators
+		{"&", 40}, {"|", 30}//shortcircuit operators
+	};
+
+	//printf("-%s-\n", info->string);
+	info->lineNum++;
+	TOKEN_ARR *safteyTrigger = realloc(info->tokenArr, INIT_BUFF_SIZE * sizeof(TOKEN_ARR));
+	if (safteyTrigger == NULL) return EXITCHAR;
+	info->tokenArr = safteyTrigger;
+
+	int finger = -1, load = 0;
+	char tempBuffer[VAR_LENGTH];
+	char *localStringBuffer = malloc(INIT_STRING_SIZE * sizeof(char));
+	if (localStringBuffer == NULL) return EXITCHAR;
+
+
+	do {
+		finger++;
+		tempBuffer[finger] = info->string[finger];
+	} while (tempBuffer[finger] != ' ' && tempBuffer[finger] != '\0');
+	tempBuffer[finger] = '\0';
+
+	int lexerMode = -1;
+	if(info->string[finger++] == '=') {
+		for (int x = 0; x < info->noOfVars; x++) {
+			if (!strcmp(tempBuffer, info->varTable[x].name)) {
+				lexerMode = ASN;
+				TOKEN_ARR temp;
+				temp.token = VARIABLE;
+				temp.stringBuffer = NULL;
+				temp.var = &info->varTable[x];
+				info->tokenArr[0] = temp;
+			}
+		}
+	} else {
+		for (int x = 0; x <= TIL; x++) {
+			if (!strcmp(tempBuffer, tokenTable[x].pattern)) {
+				lexerMode = x;
+				TOKEN_ARR temp;
+				temp.token = x;
+				temp.weight = tokenTable[x].weight;
+				temp.load = 0;
+				temp.stringBuffer = NULL;
+				temp.var = NULL;
+				info->tokenArr[0] = temp;
+			}
+		}
+	}
+	if (lexerMode == -1) {
+		printError();
+		return NOISSUE;
+	}
+	char status = parser(info);
+	return status;
 }
+
+char parser (PSTAT *info) {
+	switch (info->tokenArr[0].token) {
+		case STP: printf("PARSER: 'STP' tokken from lexer\n"); break;
+		case KIL: printf("PARSER: 'KIL' tokken from lexer\n"); break;
+		case LET: printf("PARSER: 'LET' tokken from lexer\n"); break;
+		case PUT: printf("PARSER: 'PUT' tokken from lexer\n"); break;
+		case GET: printf("PARSER: 'GET' tokken from lexer\n"); break;
+		case CON: printf("PARSER: 'CON' tokken from lexer\n"); break;
+		case FOR: printf("PARSER: 'FOR' tokken from lexer\n"); break;
+		case TIL: printf("PARSER: 'TIL' tokken from lexer\n"); break;
+		case ASN: printf("PARSER: 'ASN' tokken from lexer\n"); break;
+		case VARIABLE: printf("PARSER: 'VARIABLE' tokken from lexer\n"); break;
+		default : break;
+	}
+}
+
+void printError () {
+	printf("Syntax Error\n");
+	return;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

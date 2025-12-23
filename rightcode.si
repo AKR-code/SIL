@@ -1,0 +1,7 @@
+let x
+let y
+get x
+put ["hello world"];
+if x > y {
+	put ["this is good"]
+}

@@ -9,16 +9,16 @@ int main () {
 }
 
 int A (int dummy) {
-	printf("This is A\n");
+	printf ("This is A\n");
 	return dummy;
 }
 
 int B (int dummy) {
-	printf("This is B\n");
+	printf ("This is B\n");
 	return dummy;
 }
 
 int C (int dummy) {
-	printf("This is C\n");
+	printf ("This is C\n");
 	return dummy;
 }
