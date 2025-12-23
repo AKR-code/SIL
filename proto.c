@@ -1,5 +1,9 @@
 #include<stdio.h>
 
+int allocations = 0;
+
+void *myalloc( )
+
 int A (int);
 int B (int);
 int C (int);

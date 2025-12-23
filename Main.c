@@ -46,8 +46,8 @@ char reader (FILE *, PSTAT *);
 char lexer (PSTAT *);
 char parser (PSTAT *);
 PSTAT *setupEnvironment ();
-void clearEnvironment (PSTAT *);
-void printError ();
+void clearEnvironment (PSTAT *, FILE *);
+void printError01 (int, char *);
 
 /***************************\
 |------------MAIN-----------|
@@ -99,7 +99,7 @@ void loop(FILE *inputLoc, int isShell) {
 		if (isShell) printf("SIL: ");
 		status = reader(inputLoc, info);
 	} while (status != EXITCHAR);
-	clearEnvironment(info); 
+	clearEnvironment(info, inputLoc); 
 }
 
 /*************************\
@@ -121,11 +121,12 @@ PSTAT *setupEnvironment() {
 |----clearEnvironment----|
 \************************/
 
-void clearEnvironment(PSTAT *info) {
-	free(info->varTable);
-	free(info->string);
-	free(info->tokenArr);
+void clearEnvironment(PSTAT *info, FILE *inputLoc) {
+	if (info->varTable != NULL) free(info->varTable);
+	if (info->string != NULL) free(info->string);
+	if (info->tokenArr != NULL) free(info->tokenArr);
 	free(info);
+	if (inputLoc != stdin) fclose(inputLoc);
 }
 
 /***************************\
@@ -140,6 +141,8 @@ char reader(FILE *inputLoc, PSTAT *info) {
 	if (c == EOF) return EXITCHAR; 
 
 	int size = INIT_BUFF_SIZE, index = 0, comment = 0, firstChar = 0, doubleQuote = 0, extraSpace = 0, braceDepth = 0;
+	if (info->string != NULL) free(info->string);
+	info->string = NULL; //extra saftey
 	char *temp = realloc(info->string, size * sizeof(char));
 	if (temp == NULL) return EXITCHAR;
 	info->string = temp;
@@ -190,7 +193,6 @@ NEXT_CHAR:
 #define INIT_BUFF_SIZE 32
 #define INIT_STRING_SIZE 64
 char lexer (PSTAT *info) {
-
 	TOKEN tokenTable[TOTAL_TOKENS] = {
 		{"stop", 0}, {"kill", 10}, {"let", 10}, {"put", 10}, {"get", 10}, {"if", 10}, {"for", 10}, {"till", 10}, {"=", 20},//functions
 		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70},//arthematic operators
@@ -198,22 +200,22 @@ char lexer (PSTAT *info) {
 		{"&", 40}, {"|", 30}//shortcircuit operators
 	};
 
-	//printf("-%s-\n", info->string);
 	info->lineNum++;
 	TOKEN_ARR *safteyTrigger = realloc(info->tokenArr, INIT_BUFF_SIZE * sizeof(TOKEN_ARR));
 	if (safteyTrigger == NULL) return EXITCHAR;
 	info->tokenArr = safteyTrigger;
 
-	int finger = -1, load = 0;
+	int finger = 0, load = 0;
 	char tempBuffer[VAR_LENGTH];
 	char *localStringBuffer = malloc(INIT_STRING_SIZE * sizeof(char));
 	if (localStringBuffer == NULL) return EXITCHAR;
 
-
-	do {
-		finger++;
+	while (finger < (VAR_LENGTH - 1) &&
+			info->string[finger] != ' ' &&
+			info->string[finger] != '\0') {
 		tempBuffer[finger] = info->string[finger];
-	} while (tempBuffer[finger] != ' ' && tempBuffer[finger] != '\0');
+		finger++;
+	}
 	tempBuffer[finger] = '\0';
 
 	int lexerMode = -1;
@@ -243,12 +245,18 @@ char lexer (PSTAT *info) {
 		}
 	}
 	if (lexerMode == -1) {
-		printError();
+		printError01(info->lineNum, tempBuffer);
 		return NOISSUE;
 	}
 	char status = parser(info);
+	if (localStringBuffer != NULL) free(localStringBuffer);
+	localStringBuffer = NULL;
 	return status;
 }
+
+/***************************\
+|---------PARSER------------|
+\***************************/
 
 char parser (PSTAT *info) {
 	switch (info->tokenArr[0].token) {
@@ -264,23 +272,18 @@ char parser (PSTAT *info) {
 		case VARIABLE: printf("PARSER: 'VARIABLE' tokken from lexer\n"); break;
 		default : break;
 	}
+
+	return NOISSUE;
 }
 
-void printError () {
-	printf("Syntax Error\n");
+/**************************\
+|------ERROR-OUPUTS--------|
+\**************************/
+
+void printError01 (int lineNum, char *string) {
+	printf("         |\n");
+	printf("line%5d: %s\n", lineNum, string);
+	printf("    Error: Invalid Identifier or Variable name\n");
+	printf("         |\n");
 	return;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
