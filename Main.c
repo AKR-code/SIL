@@ -160,7 +160,7 @@ char reader(FILE *inputLoc, PSTAT *info) {
 		} else extraSpace = 0;
 
 		if (!doubleQuote && c == '{') braceDepth++;
-		if (!doubleQuote && c == '}') braceDepth--;
+		if (braceDepth > 0 && !doubleQuote && c == '}') braceDepth--;
 		c = (c == '\n' && braceDepth ? ';' : c);
 
 		info->string[index] = (char)c;
