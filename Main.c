@@ -38,6 +38,8 @@ typedef struct {
 	TOKEN_ARR *tokenArr;//lexer generated array which stores tokens and references for parsing and executing
 	int noOfVars;
 	int lineNum;
+	int noOfTokens;
+	int tokenArrCap;
 } PSTAT;
 
 void aboutTool ();
@@ -73,6 +75,7 @@ int main (int argc, char *argv[]) {
 		}
 	}//end of deciding
 	loop(inputLoc, !(argc - 1));
+	return 0;
 }
 
 /***************************\
@@ -95,6 +98,10 @@ void aboutTool () {
 void loop(FILE *inputLoc, int isShell) {
 	char status = EXITCHAR;
 	PSTAT *info = setupEnvironment(); 
+	if (info == NULL) {
+		printf("UNKOWN ERROR 00: Failed to initiate program");
+		return;
+	};
 	do {
 		if (isShell) printf("SIL: ");
 		status = reader(inputLoc, info);
@@ -114,6 +121,7 @@ PSTAT *setupEnvironment() {
 	info->tokenArr = NULL;
 	info->noOfVars = 0;
 	info->lineNum = 0;
+	info->noOfTokens = 0;
 	return info;
 }
 
@@ -144,7 +152,10 @@ char reader(FILE *inputLoc, PSTAT *info) {
 	if (info->string != NULL) free(info->string);
 	info->string = NULL; //extra saftey
 	char *temp = realloc(info->string, size * sizeof(char));
-	if (temp == NULL) return EXITCHAR;
+	if (temp == NULL) {
+		printf("UNKNOWN ERROR 01: failed to allocate memory to a built in data structure");
+		return EXITCHAR;
+	}
 	info->string = temp;
 
 	do {
@@ -169,7 +180,10 @@ char reader(FILE *inputLoc, PSTAT *info) {
 		if (index + 1 >= size) {
 			size *= GROWTH_FACTOR;
 			char *temp = realloc(info->string, size * sizeof(char));
-			if (!temp) return EXITCHAR;
+			if (!temp) {
+				printf("UNKNOWN ERROR 02: failed to reallocate memory to a built in data structure");
+				return EXITCHAR;
+			}
 			info->string = temp;
 		}
 
@@ -180,8 +194,7 @@ NEXT_CHAR:
 	if (!firstChar) return NOISSUE;
 
 	info->string[index] = '\0';
-	char status = lexer(info);
-	return status;
+	return lexer(info);
 }
 
 #undef INIT_BUFF_SIZE 
@@ -190,25 +203,43 @@ NEXT_CHAR:
 |-----------LEXER-----------|
 \***************************/
 
+char lexeKill(PSTAT *, int *);
+char lexeLet(PSTAT *, int *);
+char lexePut(PSTAT *, TOKEN [], int *);
+char lexeGet(PSTAT *, int *);
+char lexeIf(PSTAT *, TOKEN [], int *);
+char lexeFor(PSTAT *, TOKEN [], int *);
+char lexeTill(PSTAT *, TOKEN [], int *);
+char lexeAsn(PSTAT *, TOKEN [], int *);
+int pushToken(TOKEN_ARR *, PSTAT *);
+
 #define INIT_BUFF_SIZE 32
 #define INIT_STRING_SIZE 64
+
 char lexer (PSTAT *info) {
-	TOKEN tokenTable[TOTAL_TOKENS] = {
-		{"stop", 0}, {"kill", 10}, {"let", 10}, {"put", 10}, {"get", 10}, {"if", 10}, {"for", 10}, {"till", 10}, {"=", 20},//functions
+	TOKEN tokenTable[MRG] = {
+		{"stop", 0}, {"kill", 10}, {"let", 10}, {"put", 10}, {"get", 10}, 
+		{"if", 10}, {"for", 10}, {"till", 10}, {"=", 20}, 					 //functions
 		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70},//arthematic operators
 		{"==", 55}, {"!=", 55}, {"<", 50}, {">", 50}, {"<=", 50}, {">=", 50},//relational operators
 		{"&", 40}, {"|", 30}//shortcircuit operators
 	};
 
 	info->lineNum++;
-	TOKEN_ARR *safteyTrigger = realloc(info->tokenArr, INIT_BUFF_SIZE * sizeof(TOKEN_ARR));
-	if (safteyTrigger == NULL) return EXITCHAR;
+	info->noOfTokens = 0;
+	info->tokenArrCap = INIT_BUFF_SIZE;
+	if (info->tokenArr != NULL) free(info->tokenArr);
+	info->tokenArr = NULL; // extra saftey
+	TOKEN_ARR *safteyTrigger = realloc(info->tokenArr, info->tokenArrCap * sizeof(TOKEN_ARR));
+	if (safteyTrigger == NULL) {
+		printf("UNKNOWN ERROR 03: failed to reallocate memory to a built in data structure");
+		return EXITCHAR;
+	}
 	info->tokenArr = safteyTrigger;
 
-	int finger = 0, load = 0;
+	int finger;
+	finger = 0;
 	char tempBuffer[VAR_LENGTH];
-	char *localStringBuffer = malloc(INIT_STRING_SIZE * sizeof(char));
-	if (localStringBuffer == NULL) return EXITCHAR;
 
 	while (finger < (VAR_LENGTH - 1) &&
 			info->string[finger] != ' ' &&
@@ -227,7 +258,10 @@ char lexer (PSTAT *info) {
 				temp.token = VARIABLE;
 				temp.stringBuffer = NULL;
 				temp.var = &info->varTable[x];
-				info->tokenArr[0] = temp;
+				if (!pushToken(&temp, info)) {
+					printf("UNKOWN ERROR 04: failed to allocate memor to a built in data structure");
+					return EXITCHAR;
+				}
 			}
 		}
 	} else {
@@ -240,7 +274,10 @@ char lexer (PSTAT *info) {
 				temp.load = 0;
 				temp.stringBuffer = NULL;
 				temp.var = NULL;
-				info->tokenArr[0] = temp;
+				if (!pushToken(&temp, info)) {
+					printf("UNKOWN ERROR 05: failed to allocate memory to abuilt in data structure");
+					return EXITCHAR;
+				}
 			}
 		}
 	}
@@ -248,11 +285,199 @@ char lexer (PSTAT *info) {
 		printError01(info->lineNum, tempBuffer);
 		return NOISSUE;
 	}
-	char status = parser(info);
-	if (localStringBuffer != NULL) free(localStringBuffer);
-	localStringBuffer = NULL;
-	return status;
+
+	switch (lexerMode) {
+		case STP: return EXITCHAR; break;
+		case KIL: return lexeKill(info, &finger); break;
+		case LET: return lexeLet(info, &finger); break;
+		case PUT: return lexePut(info, tokenTable, &finger); break;
+		case GET: return lexeGet(info, &finger); break;
+		case CON: return lexeIf(info, tokenTable, &finger); break;
+		case FOR: return lexeFor(info, tokenTable, &finger); break;
+		case TIL: return lexeTill(info, tokenTable, &finger); break;
+		case ASN: return lexeAsn(info, tokenTable, &finger); break;
+		default: break;
+	}
 }
+
+typedef enum {
+	ER_LONG_INPUT, ER_NO_INPUT, ER_WRONG_INPUT
+} ER;
+
+void printError00 (int lineNum, char string[], int type) {
+	printf("         |\n");
+	printf("line%5d: kill %s\n", lineNum, string);
+	printf("    Error: ");
+	switch (type) {
+		case ER_LONG_INPUT: printf("invalid variable name or you cannot use expressions while killing a variable\n"); break;
+		case ER_NO_INPUT: printf("variable name is not mentioned to kill\n"); break;
+		case ER_WRONG_INPUT: printf("variable of given name doesnt exist to kill\n");
+	}
+	printf("         |\n");
+}
+
+char lexeKill (PSTAT *info, int *finger) {
+	//searches for variable and adds var token in token array
+	char tempBuffer[2 * VAR_LENGTH];
+	int index = 0;
+	while (index < (2 * VAR_LENGTH - 1) &&
+			info->string[*finger] != '\0' &&
+			info->string[*finger] != ',' &&
+			info->string[*finger] != ';') {
+		tempBuffer[index] = info->string[*finger];
+		index++;
+		(*finger)++;
+	}
+	if (index == (2 * VAR_LENGTH - 1)) {
+		tempBuffer[2 * VAR_LENGTH - 3] = '.';
+		tempBuffer[2 * VAR_LENGTH - 2] = '.';
+		tempBuffer[2 * VAR_LENGTH - 1] = '.';
+		tempBuffer[2 * VAR_LENGTH - 0] = '\0';
+		printError00(info->lineNum, tempBuffer, ER_LONG_INPUT);
+		return NOISSUE;
+	} else if (index > VAR_LENGTH) {
+		tempBuffer[index] = '\0';
+		printError00(info->lineNum, tempBuffer, ER_LONG_INPUT);
+		return NOISSUE;
+	} else if (index == 0) {
+		tempBuffer[index] = '\0';
+		printError00(info->lineNum, tempBuffer, ER_NO_INPUT);
+		return NOISSUE;
+	}
+	tempBuffer[index] = '\0';
+	int match = 0;
+	for (int x = 0; x < info->noOfVars; x++) {
+		if (!strcmp(tempBuffer, info->varTable[x].name)) {
+				match = 1;
+				TOKEN_ARR temp;
+				temp.token = VARIABLE;
+				temp.stringBuffer = NULL;
+				temp.var = &info->varTable[x];
+				if (!pushToken(&temp, info)) {
+					printf("UNKOWN ERROR 06: failed to allocate memory to a built in data structure");
+					return EXITCHAR;
+				}
+		}
+	}
+	if (!match) printError00(info->lineNum, tempBuffer, ER_WRONG_INPUT);
+	return parser(info);
+}
+
+/**********************************\
+|------------LEXE_LET--------------|
+\**********************************/
+
+typedef enum {
+	ER_LEAD_NUM, ER_SPC_CHAR, ER_WHT_SPA, ER_EXC_LEN
+} ERROR_TYPE_02;
+
+void printError02(int lineNum, char string[], int type) {
+	printf("         |\n");
+	printf("line%5d: let %s\n", lineNum, string);
+	printf("    Error: variable name cannot have ");
+	switch (type) {
+		case ER_LEAD_NUM: printf("number at the beginning\n"); break;
+		case ER_SPC_CHAR: printf("special characters\n"); break;
+		case ER_WHT_SPA: printf("white spaces\n"); break;
+		case ER_EXC_LEN: printf("length greater than %d\n", VAR_LENGTH - 1); break;
+	}
+	printf("         |\n");
+}
+
+char lexeLet (PSTAT *info, int *finger) {
+	char varNameStr[2 * VAR_LENGTH];
+	int index = 0, whiteSpace = 0, specialChar = 0, leadingNum = 0;
+	while (index < (2 * VAR_LENGTH - 1) &&
+			info->string[*finger] != '\0' &&
+			info->string[*finger] != ',' &&
+			info->string[*finger] != ';' &&
+			info->string[*finger] != '=') {
+		varNameStr[index] = info->string[*finger];
+
+		if (index == 0 && 
+			varNameStr[index] >= '0' && 
+			varNameStr[index] <= '9') leadingNum = 1;
+		if (!whiteSpace && varNameStr[index] == ' ') whiteSpace = index;
+		if (!((varNameStr[index] >= 'a' &&
+				varNameStr[index] <= 'z') ||
+				(varNameStr[index] >= 'A' &&
+				 varNameStr[index] <= 'Z') ||
+				(varNameStr[index] >= '0' &&
+				 varNameStr[index] <= '9') ||
+				varNameStr[index] == ' ')) specialChar = 1;
+
+		index++;
+		(*finger)++;
+	}
+	int shouldReturn = 0;
+	if (leadingNum) {
+		printError02(info->lineNum, varNameStr, ER_LEAD_NUM);
+		shouldReturn = 1;
+	} 
+	if (specialChar) {
+		printError02(info->lineNum, varNameStr, ER_SPC_CHAR);
+		shouldReturn = 1;
+	}
+	if (whiteSpace && (index - whiteSpace) != 1) {
+		printError02(info->lineNum, varNameStr, ER_WHT_SPA);
+		shouldReturn = 1;
+	}
+	if (index >= VAR_LENGTH - 1) {
+		printError02(info->lineNum, varNameStr, ER_EXC_LEN);
+		shouldReturn = 1;
+	}
+	if (shouldReturn) return NOISSUE;
+
+	varNameStr[index] = '\0';
+	TOKEN_ARR temp;
+	temp.token = VARIABLE;
+	temp.stringBuffer = varNameStr; 
+	if (!pushToken(&temp, info)) {
+		printf("UNKNOWN ERROR 07: failed to allocate memory to a built in data structure");
+		return EXITCHAR;
+	}
+	return parser(info);
+}
+
+char lexePut (PSTAT *info, TOKEN tokenTable[], int *finger) {
+
+	return parser(info);
+}
+
+char lexeGet (PSTAT *info, int *finger) {
+	return parser(info);
+}
+
+char lexeIf (PSTAT *info, TOKEN tokenTable[], int *finger) {
+	return parser(info);
+}
+
+char lexeFor (PSTAT *info, TOKEN tokenTable[], int *finger) {
+	return parser(info);
+}
+
+char lexeTill (PSTAT *info, TOKEN tokenTable[], int *finger) {
+	return parser(info);
+}
+
+char lexeAsn (PSTAT *info, TOKEN tokenTable[], int *finger) {
+	return parser(info);
+}
+
+//----------------------Lexer-Utilities--------------------------\\
+
+int pushToken (TOKEN_ARR *temp, PSTAT * info) {
+	if (info->noOfTokens >= info->tokenArrCap) {
+		info->tokenArrCap *= GROWTH_FACTOR;
+		TOKEN_ARR *safteyTrigger = realloc(info->tokenArr, info->tokenArrCap * sizeof(TOKEN_ARR));
+		if (safteyTrigger == NULL) return 0;
+		info->tokenArr = safteyTrigger;
+	}
+	info->tokenArr[info->noOfTokens] = *temp;
+	info->noOfTokens++;
+	return 1;
+}
+
 
 /***************************\
 |---------PARSER------------|
