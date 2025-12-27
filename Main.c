@@ -15,7 +15,7 @@ typedef enum {
 	EQL, NTE, LES, GRT, LOE, GOE,					//Explicit relational operators
 	AND, ORR, 										//Explicit Short circuit operators
 	MRG, ITS,										//Implicit functions
-	VARIABLE, STRING, END_STMT,
+	VARIABLE, STRING, CONSTANT, END_STMT,
 	TOTAL_TOKENS
 } TOKEN_VAL;
 
@@ -169,7 +169,7 @@ char reader(FILE *inputLoc, PSTAT *info) {
 	do {
 		comment = (!doubleQuote && c == '@' ? !comment : comment);
 		firstChar = (firstChar || (c != ' ' && c != '\t' && c != '@' && !comment) ? 1 : 0);
-		doubleQuote = (c == '"' ? !doubleQuote : doubleQuote);
+		doubleQuote = (c == '"' && info->string[index-1] != '\\' ? !doubleQuote : doubleQuote);
 		if (!firstChar || (!doubleQuote && (comment || c == '@'))) goto NEXT_CHAR;
 
 		if (!doubleQuote && (c == ' ' || c == '\t')) {
@@ -224,12 +224,12 @@ char lexeTill(PSTAT *, TOKEN [], int *);
 char lexeAsn(PSTAT *, TOKEN [], int *);
 int pushToken(TOKEN_ARR *, PSTAT *);
 char recycle (PSTAT *, int *);
-char lexeIdentifier(PSTAT *, int *);
 char lexeVarFinder (PSTAT *, int *);
-char lexeVarMatcher (PSTAT *, char []);
+char lexeVarMatcher (PSTAT *, char [], int);
 int checkCondition (PSTAT *, int *);
 int checkVar (PSTAT *, int *);
 void printError01 (PSTAT *);
+char reportTrash (PSTAT *, int *);
 
 #define INIT_BUFF_SIZE 32
 #define INIT_STRING_SIZE 64
@@ -326,15 +326,12 @@ typedef enum {
 	ER_LONG_INPUT, ER_NO_INPUT, ER_WRONG_INPUT
 } ER;
 
-void printError00 (PSTAT *info, int type) {
+void printError00 (PSTAT *info, int forLet) {
 	printf("         |\n");
 	printf("line%5d: %s\n", info->lineNum, info->string);
 	printf("    Error: ");
-	switch (type) {
-		case ER_LONG_INPUT: printf("invalid variable name or you cannot use expressions in this operation\n"); break;
-		case ER_NO_INPUT: printf("variable name is not mentioned\n"); break;
-		case ER_WRONG_INPUT: printf("variable of given name doesn't exist\n");
-	}
+	if (!forLet) printf("variable of given name doesn't exist\n");
+	else printf("variable of given name already exists; cannot be created again\n");
 	printf("         |\n");
 	return;
 }
@@ -344,9 +341,15 @@ char lexeKill (PSTAT *info, int *finger) {
 	status = lexeVarFinder(info, finger);
 	if (status == EXITCHAR) return EXITCHAR;
 	else if (status == NOISSUE) return NOISSUE;
-
-	if (info->string[*finger] == '\n' ||
-		info->string[*finger] == ';') return recycle(info, finger);
+	status = reportTrash(info, finger);
+	if (status == NOISSUE) return NOISSUE;
+	
+	if (info->string[*finger] == ',') return lexeKill (info, finger);
+	else if (info->string[*finger] == '\n' ||
+		info->string[*finger] == ';') {
+		(*finger)++;
+		return recycle(info, finger);
+	}
 	else return parser(info);
 }
 
@@ -355,9 +358,15 @@ char lexeGet (PSTAT *info, int *finger) {
 	status = lexeVarFinder(info, finger);
 	if (status == EXITCHAR) return EXITCHAR;
 	else if (status == NOISSUE) return NOISSUE;
-
-	if (info->string[*finger] == '\n' ||
-		info->string[*finger] == ';') return recycle(info, finger);
+	status = reportTrash(info, finger);
+	if (status == NOISSUE) return NOISSUE;
+	
+	if (info->string[*finger] == ',') return lexeGet (info, finger);
+	else if (info->string[*finger] == '\n' ||
+		info->string[*finger] == ';') {
+		(*finger)++;
+		return recycle(info, finger);
+	}
 	else return parser(info);
 }
 
@@ -388,7 +397,8 @@ char lexeLet (PSTAT *info, int *finger) {
 	int index = 0, whiteSpace = 0, specialChar = 0, leadingNum = 0;
 	int startPoint = *finger;
 	while (index < (2 * VAR_LENGTH - 1) &&
-			checkCondition(info, finger)) {
+			checkCondition(info, finger) &&
+			info->string[*finger] != ',') {
 		varNameStr[index] = info->string[*finger];
 
 		if (index == 0 && 
@@ -421,6 +431,9 @@ char lexeLet (PSTAT *info, int *finger) {
 	if (shouldReturn) return NOISSUE;
 
 	varNameStr[index] = '\0';
+	int status = lexeVarMatcher(info, varNameStr, 1);
+	if (status == NOISSUE) return NOISSUE;
+
 	TOKEN_ARR temp;
 	temp.token = VARIABLE;
 	temp.index = startPoint;
@@ -429,7 +442,12 @@ char lexeLet (PSTAT *info, int *finger) {
 		printf("UNKNOWN ERROR 08: failed to allocate memory to a built in data structure");
 		return EXITCHAR;
 	}
-	if (info->string[*finger] == '\n' ||
+	
+	if (info->string[*finger] == ',') {
+		(*finger)++;
+		return lexeLet(info, finger);
+	}
+	else if (info->string[*finger] == '\n' ||
 		info->string[*finger] == ';') return recycle(info, finger);
 	else return parser(info);
 }
@@ -456,14 +474,14 @@ void printErrorPut(PSTAT *info, int type) {
 }
 
 char lexePut (PSTAT *info, int *finger) {
-	int usedBrackets = 0, mergeNeeded = 0, shouldReturn = 0, neverUsedBrackets = 1;
+	int mergeNeeded = 0, shouldReturn = 0;
 	do {
-		if (info->string[*finger] == '[') {
-			usedBrackets++;
-			neverUsedBrackets = 0;
-		} else if (info->string[*finger] == ']') usedBrackets--;
-		else if (info->string[*finger] == ' '){
-			//do nothing eat five star ***
+		if (info->string[*finger] == ' ' ||
+			info->string[*finger] == '[' ||
+			info->string[*finger] == ']' ||
+			info->string[*finger] == '(' ||
+			info->string[*finger] == ')'){
+			//do nothing eat five star *****
 		}else if (info->string[*finger] == '"') {
 			if (mergeNeeded) {
 				printErrorPut(info, ER_WANT_MRG);
@@ -471,11 +489,13 @@ char lexePut (PSTAT *info, int *finger) {
 			}
 			(*finger)++;
 			int startPoint = *finger;
-			while (info->string[*finger] != '"') {
+			int infLoop = 0;
+			while (!infLoop && (info->string[*finger] != '"' || info->string[*finger - 1] == '\\')) {
 				(*finger)++;
 				if (!checkCondition(info, finger)) {
 					printErrorPut(info, ER_UNCLOSED_PAIR);
 					shouldReturn = 1;
+					infLoop = 1;
 				}
 			}
 			int len = *finger - startPoint;
@@ -514,13 +534,14 @@ char lexePut (PSTAT *info, int *finger) {
 			if (status == EXITCHAR) return EXITCHAR;
 			else if (status == NOISSUE) shouldReturn = 1;
 			mergeNeeded = 1;
+			continue;
 		} else {
 			printError01(info);
 			shouldReturn = 1;
 		}
 		(*finger)++;
-	} while (!(!neverUsedBrackets && usedBrackets == 0) && checkCondition(info, finger));
-
+	} while (checkCondition(info, finger));
+	
 	if (shouldReturn) return NOISSUE;
 	if (info->string[*finger] == '\n' ||
 		info->string[*finger] == ';') return recycle(info, finger);
@@ -548,35 +569,6 @@ char lexeStop (PSTAT *info, int *finger) {
 }
 
 //----------------------Lexer-Utilities--------------------------\\
-
-char lexeIdentifier (PSTAT *info, int *finger) {
-	//searches for variable and adds var token in token array
-	char tempBuffer[2 * VAR_LENGTH];
-	int index = 0;
-	while (index < (2 * VAR_LENGTH - 1) &&
-			checkCondition(info, finger)) {
-		tempBuffer[index] = info->string[*finger];
-		index++;
-		(*finger)++;
-	}
-	if (index == (2 * VAR_LENGTH - 1)) {
-		tempBuffer[2 * VAR_LENGTH - 3] = '.';
-		tempBuffer[2 * VAR_LENGTH - 2] = '.';
-		tempBuffer[2 * VAR_LENGTH - 1] = '.';
-		tempBuffer[2 * VAR_LENGTH - 0] = '\0';
-		printError00(info, ER_LONG_INPUT);
-		return NOISSUE;
-	} else if (index > VAR_LENGTH) {
-		tempBuffer[index] = '\0';
-		printError00(info, ER_LONG_INPUT);
-		return NOISSUE;
-	} else if (index == 0) {
-		tempBuffer[index] = '\0';
-		printError00(info, ER_NO_INPUT);
-		return NOISSUE;
-	}
-	return lexeVarMatcher(info, tempBuffer);
-}
 
 int checkCondition (PSTAT *info, int *finger) {
 	if (info->string[*finger] != ';' &&
@@ -607,10 +599,10 @@ char lexeVarFinder (PSTAT *info, int *finger) {
 		(*finger)++;
 	}
 	tempBuffer[index] = '\0';
-	return lexeVarMatcher(info, tempBuffer);
+	return lexeVarMatcher(info, tempBuffer, 0);
 }
 
-char lexeVarMatcher (PSTAT *info, char tempBuffer[VAR_LENGTH]) {
+char lexeVarMatcher (PSTAT *info, char tempBuffer[VAR_LENGTH], int forLet) {
 	int match = 0;
 	for (int x = 0; x < info->noOfVars; x++) {
 		if (!strcmp(tempBuffer, info->varTable[x].name)) {
@@ -626,10 +618,14 @@ char lexeVarMatcher (PSTAT *info, char tempBuffer[VAR_LENGTH]) {
 			}
 		}
 	}
-	if (!match) {
-		printError00(info, ER_WRONG_INPUT);
+	if (!match && !forLet) {
+		printError00(info, forLet);
+		return NOISSUE;
+	} else if (match && forLet) {
+		printError00(info, forLet);
 		return NOISSUE;
 	}
+
 	return CONTCHAR;
 }
 
@@ -655,6 +651,17 @@ char recycle (PSTAT *info, int *finger) {
 		(*finger)++;
 		if (info->string[*finger] == ' ') (*finger)++;
 		return LEXE_RECYCLE;
+}
+
+char reportTrash (PSTAT *info, int *finger) {
+	int shouldReturn = 0;
+	while (checkCondition(info, finger) &&
+			info->string[*finger] != ',') {
+		if (info->string[*finger] != ' ') shouldReturn = 1;
+		(*finger)++;
+	}
+	if (shouldReturn) return NOISSUE;
+	return CONTCHAR;
 }
 
 /***************************\
@@ -739,8 +746,12 @@ char get (PSTAT *info) {
 }
 
 char kill (PSTAT *info) {
-	info->tokenArr[1].var->name[0] = '\0';
-	return NOISSUE;
+	int i = 0;
+	while (info->tokenArr[1].var->name == info->varTable[i].name) i++;
+	for (int x = i; x < info->noOfVars - 1; x++) {
+		info->varTable[x] = info->varTable[x + 1];
+	}
+	info->noOfVars--;
 }
 
 char put (PSTAT *info) {
@@ -748,14 +759,26 @@ char put (PSTAT *info) {
 	while (x < info->noOfTokens) {
 		if (info->tokenArr[x].token == STRING) {
 			for (int y = info->tokenArr[x].index; y < (info->tokenArr[x].length + info->tokenArr[x].index); y++) {
-				printf("%c", info->string[y]);
+				if (info->string[y] == '\\') {
+					y++;
+					switch (info->string[y]) {
+						case 'n': printf("\n"); break;
+						case 't': printf("\t"); break;
+						case '\'': printf("\'"); break;
+						case '\"': printf("\""); break;
+						case '\\': printf("\\"); break;
+						case '0': printf("\0"); break;
+						default: y--;
+					}
+				}
+				else printf("%c", info->string[y]);
 			}
 		} else if (info->tokenArr[x].token == VARIABLE) {
 			printf("%d", info->tokenArr[x].var->value);
 		}
 		x++;
 	}
-	printf("\n");
+	//printf("\n");
 	return NOISSUE;
 }
 
