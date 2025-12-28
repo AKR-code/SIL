@@ -30,6 +30,7 @@ typedef struct {
 	int load;
 	int index;
 	int length;
+	int constVal;
 	VAR *var;
 } TOKEN_ARR;
 
@@ -230,6 +231,8 @@ int checkCondition (PSTAT *, int *);
 int checkVar (PSTAT *, int *);
 void printError01 (PSTAT *);
 char reportTrash (PSTAT *, int *);
+char lexeExpression (PSTAT *, int *);
+char lexeNumber (PSTAT *, int *);
 
 #define INIT_BUFF_SIZE 32
 #define INIT_STRING_SIZE 64
@@ -266,7 +269,8 @@ RE_LEXE:
 	tempBuffer[index] = '\0';
 
 	int lexerMode = -1;
-	if(info->string[finger++] == '=') {
+	finger++;
+	if(info->string[finger] == '=') {
 		for (int x = 0; x < info->noOfVars; x++) {
 			if (!strcmp(tempBuffer, info->varTable[x].name)) {
 				lexerMode = ASN;
@@ -279,6 +283,7 @@ RE_LEXE:
 					printf("UNKOWN ERROR 04: failed to allocate memor to a built in data structure");
 					return EXITCHAR;
 				}
+				continue;
 			}
 		}
 	} else {
@@ -296,6 +301,7 @@ RE_LEXE:
 					printf("UNKOWN ERROR 05: failed `to allocate memory to abuilt in data structure");
 					return EXITCHAR;
 				}
+				continue;
 			}
 		}
 	}
@@ -560,8 +566,50 @@ char lexeTill (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	return parser(info);
 }
 
+typedef enum {
+	EXPECTING_EXPR, TOO_MANY_CLO, OPERATOR_UNEXPECTED, OPERATOR_NEEDED, PAIR_CLO_ER
+} ER_ASN;
+
+void printErrorAsn (PSTAT *info, int type) {
+	printf("         |\n");
+	printf("line%5d: %s\n", info->lineNum, info->string);
+	printf("    Error: ");
+	switch (type) {
+		case EXPECTING_EXPR: printf("expecting an expression to assign %s\n", info->tokenArr[0].var->name); break;
+		case TOO_MANY_CLO: printf("closing too many paranthesis without opening\n"); break;
+		case OPERATOR_UNEXPECTED: printf("operator is not expected without a variable or constant\n"); break;
+		case OPERATOR_NEEDED: printf("operator is expected between two variables or constants\n"); break;
+		case PAIR_CLO_ER: printf("opened paranthesis were not closed\n"); break;
+	}
+	printf("         |\n");
+	return;
+
+}
+
 char lexeAsn (PSTAT *info, TOKEN tokenTable[], int *finger) {
-	return parser(info);
+	while (info->string[*finger] != '=' && 
+		   checkCondition(info, finger)) (*finger)++;
+	if (!checkCondition(info, finger)) {
+		printErrorAsn (info, EXPECTING_EXPR);
+		return NOISSUE;
+	}
+	TOKEN_ARR temp;
+	temp.token = ASN;
+	temp.index = 0;
+	temp.length = 0;
+	temp.var = NULL;
+	if (!pushToken(&temp, info)) {
+		printf("UNKNOWN ERROR 13");
+		return EXITCHAR;
+	}
+	(*finger)++;
+	char status = lexeExpression(info, finger);
+	if (status == EXITCHAR) return EXITCHAR;
+	else if (status == NOISSUE) return NOISSUE;
+
+	if (info->string[*finger] == '\n' ||
+		info->string[*finger] == ';') return recycle(info, finger);
+	else return parser(info);
 }
 
 char lexeStop (PSTAT *info, int *finger) {
@@ -664,6 +712,98 @@ char reportTrash (PSTAT *info, int *finger) {
 	return CONTCHAR;
 }
 
+#define INT_SIZE 24;
+
+char lexeNumber (PSTAT *info, int *finger) {
+	int constant = 0, faceValue = 0, placeValue = 1;
+	do {
+		faceValue = info->string[*finger] - '0';
+		constant += faceValue * placeValue;
+		placeValue *= 10;
+		(*finger)++;
+	} while (info->string[*finger] >= '0' &&
+			 info->string[*finger] <= '9');
+	TOKEN_ARR temp;
+	temp.token = CONSTANT;
+	temp.index = 0;
+	temp.length = 0;
+	temp.var = NULL;
+	temp.constVal = constant;
+	if (!pushToken(&temp, info)) {
+		printf("UNKNOWN ERROR 14");
+		return EXITCHAR;
+	} 
+	return CONTCHAR;
+}
+
+char lexeExpression (PSTAT *info, int *finger) {
+	int operator = 0, load = 0, shouldReturn = 0;
+	do {
+		if (info->string[*finger] == ' ') {}
+		else if (info->string[*finger] == '(') load += 1000;
+		else if (info->string[*finger] == ')') {
+			load -= 1000;
+			if (load < 0) {
+				printErrorAsn(info, TOO_MANY_CLO);
+				shouldReturn = 1;
+			}
+		} else if (info->string[*finger] >= '0' &&
+				   info->string[*finger] <= '9') {
+			if (operator) {
+				printErrorAsn(info, OPERATOR_NEEDED);
+				shouldReturn = 1;
+			}
+
+			char status = lexeNumber(info, finger);
+			if (status == EXITCHAR) return EXITCHAR;
+			operator = 1;
+			continue;
+		} else if (checkVar(info, finger)) {
+			if (operator) {
+				printErrorAsn(info, OPERATOR_NEEDED);
+				shouldReturn = 1;
+			}
+			char status;
+			status = lexeVarFinder(info, finger);
+			if (status == EXITCHAR) return EXITCHAR;
+			else if (status == NOISSUE) shouldReturn = 1;
+			operator = 1;
+			continue;
+		} else if (info->string[*finger] == '+' ||
+				   info->string[*finger] == '-' ||
+				   info->string[*finger] == '*' ||
+				   info->string[*finger] == '/') {
+			if (!operator) {
+				printErrorAsn(info, OPERATOR_UNEXPECTED);
+				shouldReturn = 1;
+			}
+			char buffer = info->string[*finger];
+			TOKEN_ARR temp;
+			switch (buffer) {
+				case '+': temp.token = ADD; break; 
+				case '-': temp.token = SUB; break;
+				case '*': temp.token = MLT; break;
+				case '/': temp.token = DVD; break;
+			}
+			if (!pushToken(&temp, info)) {
+				printf("UNKNOWN ERROR 14");
+				return EXITCHAR;
+			}
+			operator = 0;
+		} else {
+			printError01(info);
+			return NOISSUE;
+		}
+		(*finger)++;
+	} while (checkCondition(info, finger));
+	if (load != 0 && load > 0) {
+		printErrorAsn(info, PAIR_CLO_ER);
+		return NOISSUE;
+	} 
+	if (shouldReturn) return NOISSUE;
+	return CONTCHAR;
+}
+
 /***************************\
 |---------PARSER------------|
 \***************************/
@@ -674,9 +814,8 @@ char put(PSTAT *);
 char get(PSTAT *);
 
 char parser (PSTAT *info) {
-	char status;
-	//printf("line %d", info->lineNum);
-	//for (int x = 0; x < info->noOfTokens; x++) {
+	char status = NOISSUE;
+//	for (int x = 0; x < info->noOfTokens; x++) {
 		switch (info->tokenArr[0].token) {
 			case STP: return EXITCHAR;
 			case KIL: status = kill(info); break;
@@ -686,8 +825,20 @@ char parser (PSTAT *info) {
 			case CON: printf("'CON', "); break;
 			case FOR: printf("'FOR', "); break;
 			case TIL: printf("'TIL', "); break;
-			case ASN: printf("'ASN', "); break;
-			/*case VARIABLE: printf("'VARIABLE', "); 
+			case VARIABLE: 
+					  for (int x = 0; x < info->noOfTokens; x++) {
+						  switch (info->tokenArr[x].token) {
+							  case VARIABLE: printf("VAR, "); break;
+							  case ADD: printf("ADD, "); break;
+							  case SUB: printf("SUB, "); break;
+							  case MLT: printf("MLT, "); break;
+							  case DVD: printf("DVD, "); break;
+							  case CONSTANT: printf("CON, "); break;
+							  case ASN: printf("ASN, "); break;
+							  default: printf("UNK, "); break;
+						  }
+					  }; printf("\n"); break;
+/*			case VARIABLE: printf("'VAR', "); 
 					for (int y = info->tokenArr[x].index; y < (info->tokenArr[x].length + info->tokenArr[x].index); y++) {
 						printf("%c", info->string[y]);
 					}break;
@@ -696,10 +847,11 @@ char parser (PSTAT *info) {
 			case STRING: printf("'STR', ");
 					for (int y = info->tokenArr[x].index; y < (info->tokenArr[x].length + info->tokenArr[x].index); y++) {
 						printf("%c", info->string[y]);
-					}break;*/
+					}break;
+			case CONSTANT: printf("'STA %d' ", info->tokenArr[x].constVal);*/
 			default : break;
 		}
-	//}
+//	}
 	return status;
 }
 

@@ -1,7 +1,7 @@
-put "tadaa!!! this is the first program written in SI lang"
+put "tadaa!!! this is the first program written in SI lang\n"
 @this is the first variable in SI lang@
 let x
-put "enter a number!!"
+put "enter a number!!\n"
 get x
 
-put "you have entered ", x
+put "you have entered ", x, "\n"
