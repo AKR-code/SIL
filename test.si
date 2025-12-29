@@ -1,7 +1,29 @@
-put "tadaa!!! this is the first program written in SI lang\n"
-@this is the first variable in SI lang@
-let x
-put "enter a number!!\n"
-get x
+@ Expression parsing stress test @
 
-put "you have entered ", x, "\n"
+let a
+let b
+let c
+let result
+
+put "enter value for a: "
+get a
+put "enter value for b: "
+get b
+put "enter value for c: "
+get c
+
+@ precedence test @
+result = a + b * c
+put "a + b * c = ", result, "\n"
+
+@ parentheses override @
+result = (a + b) * c
+put "(a + b) * c = ", result, "\n"
+
+@ nested parentheses @
+result = (a + (b * (c + 2))) / 2
+put "(a + (b * (c + 2))) / 2 = ", result, "\n"
+
+@ chained operations @
+result = a + b + c * 2 - 4 / 2
+put "a + b + c * 2 - 4 / 2 = ", result, "\n"

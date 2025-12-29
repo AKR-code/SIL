@@ -1,0 +1,34 @@
+SIL V0.1
+this is a prototype for LAMDA
+SIL: parsing from 0 to 2
+Min wt tok in the win fro 0 to 2 at index 0
+Base case hit at token index 1
+SIL: parsing from 0 to 3
+Min wt tok in the win fro 0 to 3 at index 1
+Base case hit at token index 0
+Base case hit at token index 2
+SIL: parsing from 0 to 5
+Min wt tok in the win fro 0 to 5 at index 1
+Base case hit at token index 0
+Min wt tok in the win fro 2 to 5 at index 3
+Base case hit at token index 2
+Base case hit at token index 4
+SIL: parsing from 0 to 5
+Min wt tok in the win fro 0 to 5 at index 1
+Base case hit at token index 0
+Min wt tok in the win fro 2 to 5 at index 3
+Base case hit at token index 2
+Base case hit at token index 4
+SIL: parsing from 0 to 5
+Min wt tok in the win fro 0 to 5 at index 1
+Base case hit at token index 0
+Min wt tok in the win fro 2 to 5 at index 3
+Base case hit at token index 2
+Base case hit at token index 4
+SIL: parsing from 0 to 2
+Min wt tok in the win fro 0 to 2 at index 0
+Base case hit at token index 1
+4SIL: parsing from 0 to 1
+Base case hit at token index 0
+Min wt tok in the win fro 0 to 1 at index 0
+Abnormal error found by ParserSIL: 

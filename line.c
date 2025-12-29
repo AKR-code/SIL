@@ -1,38 +1,28 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
-
 #define EXPECTARG 2
 #define VAR_LENGTH 15
 typedef struct {
 	int value;
 	char name[15];
 } VAR;
-
 typedef enum {
-	STP, KIL, LET, PUT, GET, CON, FOR, TIL, ASN, 	// Explicit functions
-	DVD, MLT, SUB, ADD,							 	//Explicit arthematic operators
-	EQL, NTE, LES, GRT, LOE, GOE,					//Explicit relational operators
-	AND, ORR, 										//Explicit Short circuit operators
-	MRG, ITS,										//Implicit functions
-	VARIABLE, STRING, CONSTANT, END_STMT,
-	TOTAL_TOKENS
+	STP, KIL, LET, PUT, GET, CON, FOR, TIL, ASN, DVD, MLT, SUB, ADD, EQL, NTE, LES, GRT, LOE, GOE, AND, ORR, MRG, ITS, VARIABLE, STRING, CONSTANT, END_STMT, TOTAL_TOKENS
 } TOKEN_VAL;
-
 typedef struct {
 	char pattern[5];
 	int weight;
 } TOKEN;
-
 typedef struct {
 	TOKEN_VAL token;
 	int weight;
+	int load;
 	int index;
 	int length;
 	int constVal;
 	VAR *var;
 } TOKEN_ARR;
-
 typedef struct {
 	VAR *varTable;		//pointer to symbol table for storing user created variables
 	char *string;		//pointer to buffer, where string read from file is stored
@@ -43,7 +33,6 @@ typedef struct {
 	int tokenArrCap;
 	int varTableCap;
 } PSTAT;
-
 void aboutTool ();
 void loop (FILE *, int);
 char reader (FILE *, PSTAT *);
@@ -51,17 +40,10 @@ char lexer (PSTAT *);
 char parser (PSTAT *);
 PSTAT *setupEnvironment ();
 void clearEnvironment (PSTAT *, FILE *);
-
-/***************************\
-|------------MAIN-----------|
-\***************************/
-
 int main (int argc, char *argv[]) {
 	if (argc > EXPECTARG) {
 		printf("Error: Too many targets\n");
-		for (int i = 1; i < argc; i++) {
-			printf("       %s\n", argv[i]);
-		}
+		for (int i = 1; i < argc; i++) printf("       %s\n", argv[i]);
 		return 1;
 	}
 	FILE *inputLoc = NULL;
@@ -78,26 +60,15 @@ int main (int argc, char *argv[]) {
 	loop(inputLoc, !(argc - 1));
 	return 0;
 }
-
-/***************************\
-|--------ABOUT_TOOL-_-------|
-\***************************/
-
 void aboutTool () {
 	printf("SIL V0.1\n");
 	printf("this is a prototype for LAMDA\n");
 	return;
 }
-
-/***************************\
-|-----------LOOP------------|
-\***************************/
-
 #define EXITCHAR 0
 #define NOISSUE 1
 #define LEXE_RECYCLE 2
 #define CONTCHAR 3
-
 void loop(FILE *inputLoc, int isShell) {
 	char status = EXITCHAR;
 	PSTAT *info = setupEnvironment(); 
@@ -111,13 +82,7 @@ void loop(FILE *inputLoc, int isShell) {
 	} while (status != EXITCHAR);
 	clearEnvironment(info, inputLoc); 
 }
-
-/*************************\
-|----setupEnvironment-----|
-\*************************/
-
 #define INIT_BUFF_SIZE 32
-
 PSTAT *setupEnvironment() {
 	PSTAT *info = malloc(sizeof(PSTAT));
 	if (info == NULL) return NULL;
@@ -132,13 +97,7 @@ PSTAT *setupEnvironment() {
 	info->tokenArrCap = INIT_BUFF_SIZE;
 	return info;
 }
-
 #undef INIT_BUFF_SIZE
-
-/************************\
-|----clearEnvironment----|
-\************************/
-
 void clearEnvironment(PSTAT *info, FILE *inputLoc) {
 	if (info->varTable != NULL) free(info->varTable);
 	if (info->string != NULL) free(info->string);
@@ -146,14 +105,8 @@ void clearEnvironment(PSTAT *info, FILE *inputLoc) {
 	free(info);
 	if (inputLoc != stdin) fclose(inputLoc);
 }
-
-/***************************\
-|----------READER-----------|
-\***************************/
-
 #define INIT_BUFF_SIZE 64
 #define GROWTH_FACTOR 2
-
 char reader(FILE *inputLoc, PSTAT *info) {	
 	int c = fgetc(inputLoc);
 	if (c == EOF) return EXITCHAR; 
@@ -161,29 +114,23 @@ char reader(FILE *inputLoc, PSTAT *info) {
 		info->lineNum++;
 		c = fgetc(inputLoc);
 	}
-
 	int size = INIT_BUFF_SIZE, index = 0, comment = 0, firstChar = 0, doubleQuote = 0, extraSpace = 0, braceDepth = 0;
 	if (info->string != NULL) free(info->string);
 	info->string = malloc(size * sizeof(char));
-
 	do {
 		comment = (!doubleQuote && c == '@' ? !comment : comment);
 		firstChar = (firstChar || (c != ' ' && c != '\t' && c != '@' && !comment) ? 1 : 0);
 		doubleQuote = (c == '"' && info->string[index-1] != '\\' ? !doubleQuote : doubleQuote);
 		if (!firstChar || (!doubleQuote && (comment || c == '@'))) goto NEXT_CHAR;
-
 		if (!doubleQuote && (c == ' ' || c == '\t')) {
 			c = ' ';
 			if (extraSpace) goto NEXT_CHAR;
 			extraSpace = 1;
 		} else extraSpace = 0;
-
 		if (!doubleQuote && c == '{') braceDepth++;
 		if (braceDepth > 0 && !doubleQuote && c == '}') braceDepth--;
-
 		info->string[index] = (char)c;
 		index++;
-
 		if (index + 1 >= size) {
 			size *= GROWTH_FACTOR;
 			char *temp = realloc(info->string, size * sizeof(char));
@@ -193,7 +140,6 @@ char reader(FILE *inputLoc, PSTAT *info) {
 			}
 			info->string = temp;
 		}
-
 NEXT_CHAR:
 		c = fgetc(inputLoc);
 	} while ((braceDepth || c != '\n') && c != EOF);
@@ -201,18 +147,11 @@ NEXT_CHAR:
 		info->lineNum++;
 		return NOISSUE;
 	}
-	
 	if (info->string[index - 1] == ' ') info->string[index - 1] = '\0';
 	else info->string[index] = '\0';
 	return lexer(info);
 }
-
 #undef INIT_BUFF_SIZE 
-
-/***************************\
-|-----------LEXER-----------|
-\***************************/
-
 char lexeStop(PSTAT *, int *);
 char lexeKill(PSTAT *, int *);
 char lexeGet(PSTAT *, int *);
@@ -232,32 +171,22 @@ void printError01 (PSTAT *);
 char reportTrash (PSTAT *, int *);
 char lexeExpression (PSTAT *, int *);
 char lexeNumber (PSTAT *, int *);
-
 #define INIT_BUFF_SIZE 32
 #define INIT_STRING_SIZE 64
-
 char lexer (PSTAT *info) {
 	TOKEN tokenTable[MRG] = {
-		{"stop", 0}, {"kill", 10}, {"let", 10}, {"put", 10}, {"get", 10}, 
-		{"if", 10}, {"for", 10}, {"till", 10}, {"=", 20}, 					 //functions
-		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70},//arthematic operators
-		{"==", 55}, {"!=", 55}, {"<", 50}, {">", 50}, {"<=", 50}, {">=", 50},//relational operators
-		{"&", 40}, {"|", 30}//shortcircuit operators
+		{"stop", 0}, {"kill", 10}, {"let", 10}, {"put", 10}, {"get", 10}, {"if", 10}, {"for", 10}, {"till", 10}, {"=", 20},
+		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70}, {"==", 55}, {"!=", 55}, {"<", 50}, {">", 50}, {"<=", 50}, {">=", 50}, {"&", 40}, {"|", 30}
 	};
-
 	info->lineNum++;
 	info->noOfTokens = 0;
 	info->tokenArrCap = INIT_BUFF_SIZE;
 	if (info->tokenArr != NULL) free(info->tokenArr);
 	info->tokenArr = malloc(INIT_BUFF_SIZE * sizeof(TOKEN_ARR));
-
-	int finger;
-	finger = 0;
-
+	int finger = 0;
 RE_LEXE:
 	char tempBuffer[VAR_LENGTH];
 	int index = 0;
-
 	while (index < (VAR_LENGTH - 1) &&
 			info->string[finger] != ' ' &&
 			info->string[finger] != '\0') {
@@ -266,7 +195,6 @@ RE_LEXE:
 		index++;
 	}
 	tempBuffer[index] = '\0';
-
 	int lexerMode = -1;
 	finger++;
 	if(info->string[finger] == '=') {
@@ -282,7 +210,7 @@ RE_LEXE:
 					printf("UNKOWN ERROR 04: failed to allocate memor to a built in data structure");
 					return EXITCHAR;
 				}
-				break;
+				continue;
 			}
 		}
 	} else {
@@ -292,6 +220,7 @@ RE_LEXE:
 				TOKEN_ARR temp;
 				temp.token = x;
 				temp.weight = tokenTable[x].weight;
+				temp.load = 0;
 				temp.index = 0;
 				temp.length = 0;
 				temp.var = NULL;
@@ -299,7 +228,7 @@ RE_LEXE:
 					printf("UNKOWN ERROR 05: failed `to allocate memory to abuilt in data structure");
 					return EXITCHAR;
 				}
-				break;
+				continue;
 			}
 		}
 	}
@@ -320,16 +249,13 @@ RE_LEXE:
 		case ASN: status = lexeAsn(info, tokenTable, &finger); break;
 		default: break;
 	}
-
 	if (status == NOISSUE) return NOISSUE;
 	else if (status == EXITCHAR) return EXITCHAR;
 	else if (status == LEXE_RECYCLE) goto RE_LEXE;
 }
-
 typedef enum {
 	ER_LONG_INPUT, ER_NO_INPUT, ER_WRONG_INPUT
 } ER;
-
 void printError00 (PSTAT *info, int forLet) {
 	printf("         |\n");
 	printf("line%5d: %s\n", info->lineNum, info->string);
@@ -339,59 +265,14 @@ void printError00 (PSTAT *info, int forLet) {
 	printf("         |\n");
 	return;
 }
-
 char lexeKill (PSTAT *info, int *finger) {
 	char status;
 	status = lexeVarFinder(info, finger);
 	if (status == EXITCHAR) return EXITCHAR;
 	else if (status == NOISSUE) return NOISSUE;
 	status = reportTrash(info, finger);
-	if (status == NOISSUE) return NOISSUE;
-
-	if (info->string[*finger] == ',') {
-		TOKEN_ARR temp;
-		temp.token = END_STMT;
-		if (!pushToken (&temp, info)) {
-			printf("ER");
-			return EXITCHAR;
-		}
-		temp.token = KIL;
-		if (!pushToken (&temp, info)) {
-			printf("ERRR");
-			return EXITCHAR;
-		}
-		return lexeKill (info, finger);
-	}
-	else if (info->string[*finger] == '\n' ||
-		info->string[*finger] == ';') {
-		(*finger)++;
-		return recycle(info, finger);
-	}
-	else return parser(info); 
-}
-
-char lexeGet (PSTAT *info, int *finger) {
-	char status;
-	status = lexeVarFinder(info, finger);
-	if (status == EXITCHAR) return EXITCHAR;
-	else if (status == NOISSUE) return NOISSUE;
-	status = reportTrash(info, finger);
-	if (status == NOISSUE) return NOISSUE;
-	
-	if (info->string[*finger] == ',') {
-		TOKEN_ARR temp;
-		temp.token = END_STMT;
-		if (!pushToken (&temp, info)) {
-			printf("ER");
-			return EXITCHAR;
-		}
-		temp.token = GET;
-		if (!pushToken (&temp, info)) {
-			printf("ERRR");
-			return EXITCHAR;
-		}
-		return lexeGet (info, finger);
-	}
+	if (status == NOISSUE) return NOISSUE;	
+	if (info->string[*finger] == ',') return lexeKill (info, finger);
 	else if (info->string[*finger] == '\n' ||
 		info->string[*finger] == ';') {
 		(*finger)++;
@@ -399,15 +280,24 @@ char lexeGet (PSTAT *info, int *finger) {
 	}
 	else return parser(info);
 }
-
-/**********************************\
-|------------LEXE_LET--------------|
-\**********************************/
-
+char lexeGet (PSTAT *info, int *finger) {
+	char status;
+	status = lexeVarFinder(info, finger);
+	if (status == EXITCHAR) return EXITCHAR;
+	else if (status == NOISSUE) return NOISSUE;
+	status = reportTrash(info, finger);
+	if (status == NOISSUE) return NOISSUE;	
+	if (info->string[*finger] == ',') return lexeGet (info, finger);
+	else if (info->string[*finger] == '\n' ||
+		info->string[*finger] == ';') {
+		(*finger)++;
+		return recycle(info, finger);
+	}
+	else return parser(info);
+}
 typedef enum {
 	ER_LEAD_NUM, ER_SPC_CHAR, ER_WHT_SPA, ER_EXC_LEN
 } ERROR_TYPE_02;
-
 void printError02(PSTAT *info, int type) {
 	printf("         |\n");
 	printf("line%5d: %s\n", info->lineNum, info->string);
@@ -421,7 +311,6 @@ void printError02(PSTAT *info, int type) {
 	printf("         |\n");
 	return;
 }
-
 char lexeLet (PSTAT *info, int *finger) {
 	char varNameStr[2 * VAR_LENGTH];
 	int index = 0, whiteSpace = 0, specialChar = 0, leadingNum = 0;
@@ -430,14 +319,12 @@ char lexeLet (PSTAT *info, int *finger) {
 			checkCondition(info, finger) &&
 			info->string[*finger] != ',') {
 		varNameStr[index] = info->string[*finger];
-
 		if (index == 0 && 
 			varNameStr[index] >= '0' && 
 			varNameStr[index] <= '9') leadingNum = 1;
 		if (!whiteSpace && varNameStr[index] == ' ') whiteSpace = index;
 		if (!checkVar (info, finger) ||
 			varNameStr[index] == ' ') specialChar = 1;
-
 		index++;
 		(*finger)++;
 	}
@@ -459,31 +346,18 @@ char lexeLet (PSTAT *info, int *finger) {
 		shouldReturn = 1;
 	}
 	if (shouldReturn) return NOISSUE;
-
 	varNameStr[index] = '\0';
 	int status = lexeVarMatcher(info, varNameStr, 1);
 	if (status == NOISSUE) return NOISSUE;
-
 	TOKEN_ARR temp;
-	temp.token = STRING;
+	temp.token = VARIABLE;
 	temp.index = startPoint;
 	temp.length = index;
 	if (!pushToken(&temp, info)) {
 		printf("UNKNOWN ERROR 08: failed to allocate memory to a built in data structure");
 		return EXITCHAR;
 	}
-	
 	if (info->string[*finger] == ',') {
-		temp.token = END_STMT;
-		if (!pushToken(&temp, info)) {
-			printf("UB");
-			return EXITCHAR;
-		}
-		temp.token = LET;
-		if (!pushToken(&temp, info)) {
-			printf("UBB");
-			return EXITCHAR;
-		}
 		(*finger)++;
 		return lexeLet(info, finger);
 	}
@@ -491,15 +365,9 @@ char lexeLet (PSTAT *info, int *finger) {
 		info->string[*finger] == ';') return recycle(info, finger);
 	else return parser(info);
 }
-
-/***********************************\
-|------------LEXE-PUT---------------|
-\***********************************/
-
 typedef enum {
 	ER_WANT_MRG, ER_EXTRA_MRG, ER_UNCLOSED_PAIR
 } ER_PUT;
-
 void printErrorPut(PSTAT *info, int type) {
 	printf("         |\n");
 	printf("line%5d: %s\n", info->lineNum, info->string);
@@ -512,7 +380,6 @@ void printErrorPut(PSTAT *info, int type) {
 	printf("         |\n");
 	return;
 }
-
 char lexePut (PSTAT *info, int *finger) {
 	int mergeNeeded = 0, shouldReturn = 0;
 	do {
@@ -528,8 +395,7 @@ char lexePut (PSTAT *info, int *finger) {
 				shouldReturn = 1;
 			}
 			(*finger)++;
-			int startPoint = *finger;
-			int infLoop = 0;
+			int startPoint = *finger, infLoop = 0;
 			while (!infLoop && (info->string[*finger] != '"' || info->string[*finger - 1] == '\\')) {
 				(*finger)++;
 				if (!checkCondition(info, finger)) {
@@ -555,13 +421,10 @@ char lexePut (PSTAT *info, int *finger) {
 				shouldReturn = 1;
 			}
 			TOKEN_ARR temp;
-			temp.token = END_STMT;
-			if (!pushToken(&temp, info)) {
-				printf("UNKNOWN ERROR 10: failed to allocate memory to a built in data structure");
-				return EXITCHAR;
-			}
-			temp.token = PUT;
-			//token properties
+			temp.token = MRG;
+			temp.index = 0;
+			temp.length = 0;
+			temp.var = NULL;
 			if (!pushToken(&temp, info)) {
 				printf("UNKNOWN ERROR 10: failed to allocate memory to a built in data structure");
 				return EXITCHAR;
@@ -584,29 +447,23 @@ char lexePut (PSTAT *info, int *finger) {
 		}
 		(*finger)++;
 	} while (checkCondition(info, finger));
-	
 	if (shouldReturn) return NOISSUE;
 	if (info->string[*finger] == '\n' ||
 		info->string[*finger] == ';') return recycle(info, finger);
 	else return parser(info);
 }
-
 char lexeIf (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	return parser(info);
 }
-
 char lexeFor (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	return parser(info);
 }
-
 char lexeTill (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	return parser(info);
 }
-
 typedef enum {
 	EXPECTING_EXPR, TOO_MANY_CLO, OPERATOR_UNEXPECTED, OPERATOR_NEEDED, PAIR_CLO_ER
 } ER_ASN;
-
 void printErrorAsn (PSTAT *info, int type) {
 	printf("         |\n");
 	printf("line%5d: %s\n", info->lineNum, info->string);
@@ -620,9 +477,7 @@ void printErrorAsn (PSTAT *info, int type) {
 	}
 	printf("         |\n");
 	return;
-
 }
-
 char lexeAsn (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	while (info->string[*finger] != '=' && 
 		   checkCondition(info, finger)) (*finger)++;
@@ -632,7 +487,6 @@ char lexeAsn (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	}
 	TOKEN_ARR temp;
 	temp.token = ASN;
-	temp.weight = 20;
 	temp.index = 0;
 	temp.length = 0;
 	temp.var = NULL;
@@ -644,25 +498,19 @@ char lexeAsn (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	char status = lexeExpression(info, finger);
 	if (status == EXITCHAR) return EXITCHAR;
 	else if (status == NOISSUE) return NOISSUE;
-
 	if (info->string[*finger] == '\n' ||
 		info->string[*finger] == ';') return recycle(info, finger);
 	else return parser(info);
 }
-
 char lexeStop (PSTAT *info, int *finger) {
 	return parser(info);
 }
-
-//----------------------Lexer-Utilities--------------------------\\
-
 int checkCondition (PSTAT *info, int *finger) {
 	if (info->string[*finger] != ';' &&
 		info->string[*finger] != '\n' &&
 		info->string[*finger] != '\0' ) return 1;
 	else return 0;
 }
-
 int checkVar (PSTAT *info, int *finger) {
 	if ((info->string[*finger] >= 'a' && 
 		 info->string[*finger] <= 'z') ||
@@ -672,7 +520,6 @@ int checkVar (PSTAT *info, int *finger) {
 		 info->string[*finger] <= '9')) return 1;
 	else return 0;
 }
-
 char lexeVarFinder (PSTAT *info, int *finger) {
 	char tempBuffer[VAR_LENGTH];
 	int index = 0;
@@ -687,7 +534,6 @@ char lexeVarFinder (PSTAT *info, int *finger) {
 	tempBuffer[index] = '\0';
 	return lexeVarMatcher(info, tempBuffer, 0);
 }
-
 char lexeVarMatcher (PSTAT *info, char tempBuffer[VAR_LENGTH], int forLet) {
 	int match = 0;
 	for (int x = 0; x < info->noOfVars; x++) {
@@ -711,10 +557,8 @@ char lexeVarMatcher (PSTAT *info, char tempBuffer[VAR_LENGTH], int forLet) {
 		printError00(info, forLet);
 		return NOISSUE;
 	}
-
 	return CONTCHAR;
 }
-
 int pushToken (TOKEN_ARR *temp, PSTAT *info) {
 	if (info->noOfTokens >= info->tokenArrCap) {
 		info->tokenArrCap *= GROWTH_FACTOR;
@@ -726,7 +570,6 @@ int pushToken (TOKEN_ARR *temp, PSTAT *info) {
 	info->noOfTokens++;
 	return 1;
 }
-
 char recycle (PSTAT *info, int *finger) {
 	if (info->string[*finger] == '\n') {
 		info->lineNum++;
@@ -738,7 +581,6 @@ char recycle (PSTAT *info, int *finger) {
 		if (info->string[*finger] == ' ') (*finger)++;
 		return LEXE_RECYCLE;
 }
-
 char reportTrash (PSTAT *info, int *finger) {
 	int shouldReturn = 0;
 	while (checkCondition(info, finger) &&
@@ -749,14 +591,13 @@ char reportTrash (PSTAT *info, int *finger) {
 	if (shouldReturn) return NOISSUE;
 	return CONTCHAR;
 }
-
 #define INT_SIZE 24;
-
 char lexeNumber (PSTAT *info, int *finger) {
-	int constant = 0, faceValue = 0;
+	int constant = 0, faceValue = 0, placeValue = 1;
 	do {
 		faceValue = info->string[*finger] - '0';
-		constant = (constant * 10) + faceValue;
+		constant += faceValue * placeValue;
+		placeValue *= 10;
 		(*finger)++;
 	} while (info->string[*finger] >= '0' &&
 			 info->string[*finger] <= '9');
@@ -772,7 +613,6 @@ char lexeNumber (PSTAT *info, int *finger) {
 	} 
 	return CONTCHAR;
 }
-
 char lexeExpression (PSTAT *info, int *finger) {
 	int operator = 0, load = 0, shouldReturn = 0;
 	do {
@@ -817,22 +657,10 @@ char lexeExpression (PSTAT *info, int *finger) {
 			char buffer = info->string[*finger];
 			TOKEN_ARR temp;
 			switch (buffer) {
-				case '+': 
-					temp.token = ADD; 
-					temp.weight = 70 + load;
-					break; 
-				case '-': 
-					temp.token = SUB;
-					temp.weight = 70 + load;
-					break;
-				case '*': 
-					temp.token = MLT;
-					temp.weight = 90 + load;
-					break;
-				case '/': 
-					temp.token = DVD; 
-					temp.weight = 90 + load;
-					break;
+				case '+': temp.token = ADD; break; 
+				case '-': temp.token = SUB; break;
+				case '*': temp.token = MLT; break;
+				case '/': temp.token = DVD; break;
 			}
 			if (!pushToken(&temp, info)) {
 				printf("UNKNOWN ERROR 14");
@@ -852,249 +680,102 @@ char lexeExpression (PSTAT *info, int *finger) {
 	if (shouldReturn) return NOISSUE;
 	return CONTCHAR;
 }
-
-/***************************\
-|---------PARSER------------|
-\***************************/
-
-typedef struct {
-	char prog;
-	int value;
-	int isString;
-	int start;
-	int end;
-} RES;
-
-RES recursiveParser(PSTAT *info, RES);
-
-RES kill(PSTAT *, RES);
-RES let(PSTAT *, RES);
-RES put(PSTAT *, RES);
-RES get(PSTAT *, RES);
-RES asn(PSTAT *, RES, RES);
-RES add(PSTAT *, RES, RES);
-RES sub(PSTAT *, RES, RES);
-RES mlt(PSTAT *, RES, RES);
-RES dvd(PSTAT *, RES, RES);
-
+char kill(PSTAT *);
+char let(PSTAT *);
+char put(PSTAT *);
+char get(PSTAT *);
 char parser (PSTAT *info) {
-	int tokenIndex = 0;
-	RES init;
-	init.value = 0;
-	init.isString = 0;
-	while (tokenIndex < info->noOfTokens) {
-		init.start = tokenIndex;
-		while (tokenIndex < info->noOfTokens && 
-				info->tokenArr[tokenIndex].token != END_STMT) {
-			// pending work =================================================================== conditional block selections, and loops should be implemented here =======
-
-			// after pending work
-			tokenIndex++;
-		}
-		init.end = tokenIndex;
-		if (tokenIndex < info->noOfTokens) tokenIndex++;
-		//printf ("parsing from %d to %d\n", init.start, init.end);
-		RES m = recursiveParser(info, init);
-		if (m.prog == EXITCHAR) return EXITCHAR;
-	}
-	return NOISSUE;
-}
-
-RES recursiveParser (PSTAT *info, RES postres) {
-	postres.prog = NOISSUE;
-	// rare saftey trigger for abnormal 0 window size case
-	if (postres.start == postres.end) {
-		printf("Abnormal error found by Parser");
-		return postres;
-	}
-
-	//base case when the window is just one token
-	if (postres.start + 1 == postres.end) {
-		//printf("Base case hit at token index %d\n", postres.start);
-		postres.isString = 0;
-		switch (info->tokenArr[postres.start].token){
+	char status = NOISSUE;
+		switch (info->tokenArr[0].token) {
+			case STP: return EXITCHAR;
+			case KIL: status = kill(info); break;
+			case LET: status = let(info); break;
+			case PUT: status = put(info); break;
+			case GET: status = get(info); break;
+			case CON: printf("'CON', "); break;
+			case FOR: printf("'FOR', "); break;
+			case TIL: printf("'TIL', "); break;
 			case VARIABLE: 
-				postres.value = info->tokenArr[postres.start].var->value;
-				return postres;
-			case CONSTANT:
-				postres.value = info->tokenArr[postres.start].constVal;
-				return postres;
-			case STRING:
-				postres.isString = 1;
-				return postres;
+					  for (int x = 0; x < info->noOfTokens; x++) {
+						  switch (info->tokenArr[x].token) {
+							  case VARIABLE: printf("VAR, "); break;
+							  case ADD: printf("ADD, "); break;
+							  case SUB: printf("SUB, "); break;
+							  case MLT: printf("MLT, "); break;
+							  case DVD: printf("DVD, "); break;
+							  case CONSTANT: printf("CON, "); break;
+							  case ASN: printf("ASN, "); break;
+							  default: printf("UNK, "); break;
+						  }
+					  }; printf("\n"); break;
+			default : break;
 		}
-	}
-
-	//find minimum weight token in the window
-	int minWtIndex = -1;
-	for (int x = postres.start; x < postres.end; x++) {
-		if (info->tokenArr[x].token == VARIABLE || 
-			info->tokenArr[x].token == STRING ||
-			info->tokenArr[x].token == CONSTANT) continue;
-		if ( minWtIndex == -1 || info->tokenArr[x].weight <= info->tokenArr[minWtIndex].weight) {
-			minWtIndex = x;
-		}
-	}
-	//printf("Min wt tok in the win fro %d to %d at index %d\n", postres.start, postres.end, minWtIndex);
-	// lbranch recursion iff there exists an l branch
-	RES lhprefres = {0, 0, 0, 0, 0};
-	if (postres.start < minWtIndex) {
-		lhprefres.start = postres.start;
-		lhprefres.end = minWtIndex;
-		lhprefres = recursiveParser (info, lhprefres);
-	}
-
-	// rbranch recursion
-	RES rhprefres;
-	rhprefres.start = minWtIndex + 1;
-	rhprefres.end = postres.end;
-	rhprefres = recursiveParser (info, rhprefres);
-
-	// execution caller switch
-	switch (info->tokenArr[minWtIndex].token) {
-		case KIL:
-			postres = kill(info, rhprefres); break;
-		case LET:
-			postres = let(info, rhprefres); break;
-		case PUT:
-			postres = put(info, rhprefres); break;
-		case GET:
-			postres = get(info, rhprefres); break;
-		// more cases will come in future
-		case ASN:
-			postres = asn(info, lhprefres, rhprefres); break;
-		case DVD:
-			postres = dvd(info, lhprefres, rhprefres); break;
-		case MLT:
-			postres = mlt(info, lhprefres, rhprefres); break;
-		case SUB:
-			postres = sub(info, lhprefres, rhprefres); break;
-		case ADD:
-			postres = add(info, lhprefres, rhprefres); break;
-		// more cases will come in future
-	}
-	return postres;
+	return status;
 }
-
-/**************************\
-|---------ENGINE-----------|
-\**************************/
-
-//this only works for single statement per single line because I blindly written arrayelement 
-//numbers instead of somehow calculating; and these blind numbers dont work
-//for multiple stmts per single line
-
-RES asn (PSTAT *info, RES lhs, RES rhs) {
-	info->tokenArr[lhs.start].var->value = rhs.value;
-	RES result;
-	result.prog = NOISSUE;
-	return result;
-}
-
-RES add (PSTAT *info, RES lhs, RES rhs) {
-	RES result;
-	result.prog = NOISSUE;
-	result.value = lhs.value + rhs.value;
-	result.isString = 0;
-	return result;
-}
-
-RES sub (PSTAT *info, RES lhs, RES rhs) {
-	RES result;
-	result.prog = NOISSUE;
-	result.value = lhs.value - rhs.value;
-	result.isString = 0;
-	return result;
-}
-
-RES mlt (PSTAT *info, RES lhs, RES rhs) {
-	RES result;
-	result.prog = NOISSUE;
-	result.value = lhs.value * rhs.value;
-	result.isString = 0;
-	return result;
-}
-
-RES dvd (PSTAT *info, RES lhs, RES rhs) {
-	RES result;
-	result.prog = NOISSUE;
-	result.value = lhs.value / rhs.value;
-	result.isString = 0;
-	return result;
-}
-
-RES let (PSTAT *info, RES references) {
+char let (PSTAT *info) {
 	int index = 0;
-	for (int x = info->tokenArr[references.start].index; x < (info->tokenArr[references.start].length + info->tokenArr[references.start].index); x++) {
+	for (int x = info->tokenArr[1].index; x < (info->tokenArr[1].length + info->tokenArr[1].index); x++) {
 		info->varTable[info->noOfVars].name[index] = info->string[x];
 		index++;
 	}
 	info->varTable[info->noOfVars].name[index] = '\0';
 	info->varTable[info->noOfVars].value = 0;
 	info->noOfVars++;
-
 	if (info->noOfVars >= info->varTableCap-1) {
 		info->varTableCap *= GROWTH_FACTOR;
 		VAR *temp = realloc(info->varTable, info->varTableCap * sizeof(VAR));
 		if (temp == NULL) {
 			printf("UNKOWN ERROR 12 memory allocation failure for variable");
-			return references;
+			return EXITCHAR;
 		}
 		info->varTable = temp;
 	}
-	return references;
+	return NOISSUE;
 }
-
-RES get (PSTAT *info, RES references) {
-	int newVal;
-	int error = scanf("%d", &newVal);
-	if (error == EOF) return references;
+char get (PSTAT *info) {
+	int newVal, error = scanf("%d", &newVal);
+	if (error == EOF) return NOISSUE;
 	if (error == 0) {
 		while (getchar() != '\n');
-		return references;
+		return NOISSUE;
 	}
-	info->tokenArr[references.start].var->value = newVal;
-	return references;
+	info->tokenArr[1].var->value = newVal;
+	return NOISSUE;
 }
-
-RES kill (PSTAT *info, RES references) {
+char kill (PSTAT *info) {
 	int i = 0;
-	while (info->tokenArr[references.start].var->name == info->varTable[i].name) i++;
+	while (info->tokenArr[1].var->name == info->varTable[i].name) i++;
 	for (int x = i; x < info->noOfVars - 1; x++) {
 		info->varTable[x] = info->varTable[x + 1];
 	}
 	info->noOfVars--;
-	return references;
 }
-
-RES put (PSTAT *info, RES references) {
-	int x = references.start;
-	if (info->tokenArr[x].token == STRING) {
-		for (int y = info->tokenArr[x].index; y < (info->tokenArr[x].length + info->tokenArr[x].index); y++) {
-			if (info->string[y] == '\\') {
-				y++;
-				switch (info->string[y]) {
-					case 'n': printf("\n"); break;
-					case 't': printf("\t"); break;
-					case '\'': printf("\'"); break;
-					case '\"': printf("\""); break;
-					case '\\': printf("\\"); break;
-					case '0': printf("\0"); break;
-					default: y--;
+char put (PSTAT *info) {
+	int x = 1;
+	while (x < info->noOfTokens) {
+		if (info->tokenArr[x].token == STRING) {
+			for (int y = info->tokenArr[x].index; y < (info->tokenArr[x].length + info->tokenArr[x].index); y++) {
+				if (info->string[y] == '\\') {
+					y++;
+					switch (info->string[y]) {
+						case 'n': printf("\n"); break;
+						case 't': printf("\t"); break;
+						case '\'': printf("\'"); break;
+						case '\"': printf("\""); break;
+						case '\\': printf("\\"); break;
+						case '0': printf("\0"); break;
+						default: y--;
+					}
 				}
+				else printf("%c", info->string[y]);
 			}
-			else printf("%c", info->string[y]);
+		} else if (info->tokenArr[x].token == VARIABLE) {
+			printf("%d", info->tokenArr[x].var->value);
 		}
-	} else if (info->tokenArr[x].token == VARIABLE) {
-		printf("%d", info->tokenArr[x].var->value);
+		x++;
 	}
-	return references;
+	return NOISSUE;
 }
-
-/**************************\
-|------ERROR-OUPUTS--------|
-\**************************/
-
 void printError01 (PSTAT *info) {
 	printf("         |\n");
 	printf("line%5d: %s\n", info->lineNum, info->string);
