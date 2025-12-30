@@ -5,6 +5,8 @@
 #define EXPECTARG 2
 #define VAR_LENGTH 15
 typedef struct {
+	int nan;
+	int inf;
 	int value;
 	char name[15];
 } VAR;
@@ -14,7 +16,6 @@ typedef enum {
 	DVD, MLT, SUB, ADD,							 	//Explicit arthematic operators
 	EQL, NTE, LES, GRT, LOE, GOE,					//Explicit relational operators
 	AND, ORR, 										//Explicit Short circuit operators
-	MRG, ITS,										//Implicit functions
 	VARIABLE, STRING, CONSTANT, END_STMT,
 	TOTAL_TOKENS
 } TOKEN_VAL;
@@ -237,7 +238,7 @@ char lexeNumber (PSTAT *, int *);
 #define INIT_STRING_SIZE 64
 
 char lexer (PSTAT *info) {
-	TOKEN tokenTable[MRG] = {
+	TOKEN tokenTable[TOTAL_TOKENS] = {
 		{"stop", 0}, {"kill", 10}, {"let", 10}, {"put", 10}, {"get", 10}, 
 		{"if", 10}, {"for", 10}, {"till", 10}, {"=", 20}, 					 //functions
 		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70},//arthematic operators
@@ -360,13 +361,13 @@ char lexeKill (PSTAT *info, int *finger) {
 			printf("ERRR");
 			return EXITCHAR;
 		}
+		(*finger)++;
+		if (info->string[*finger] == ' ') (*finger)++;
 		return lexeKill (info, finger);
 	}
 	else if (info->string[*finger] == '\n' ||
-		info->string[*finger] == ';') {
-		(*finger)++;
+		info->string[*finger] == ';') 
 		return recycle(info, finger);
-	}
 	else return parser(info); 
 }
 
@@ -390,13 +391,13 @@ char lexeGet (PSTAT *info, int *finger) {
 			printf("ERRR");
 			return EXITCHAR;
 		}
+		(*finger)++;
+		if (info->string[*finger] == ' ') (*finger)++;
 		return lexeGet (info, finger);
 	}
 	else if (info->string[*finger] == '\n' ||
-		info->string[*finger] == ';') {
-		(*finger)++;
+		info->string[*finger] == ';') 
 		return recycle(info, finger);
-	}
 	else return parser(info);
 }
 
@@ -405,18 +406,20 @@ char lexeGet (PSTAT *info, int *finger) {
 \**********************************/
 
 typedef enum {
-	ER_LEAD_NUM, ER_SPC_CHAR, ER_WHT_SPA, ER_EXC_LEN
+	ER_LEAD_NUM, ER_SPC_CHAR, ER_WHT_SPA, ER_EXC_LEN, ER_USE_LOOP, ER_USE_CHAIN
 } ERROR_TYPE_02;
 
 void printError02(PSTAT *info, int type) {
 	printf("         |\n");
 	printf("line%5d: %s\n", info->lineNum, info->string);
-	printf("    Error: variable name cannot have ");
+	printf("    Error: ");
 	switch (type) {
-		case ER_LEAD_NUM: printf("number at the beginning\n"); break;
-		case ER_SPC_CHAR: printf("special characters\n"); break;
-		case ER_WHT_SPA: printf("white spaces\n"); break;
-		case ER_EXC_LEN: printf("length greater than %d\n", VAR_LENGTH - 1); break;
+		case ER_LEAD_NUM: printf("variable name cannot have number at the beginning\n"); break;
+		case ER_SPC_CHAR: printf("variable name cannot have special characters\n"); break;
+		case ER_WHT_SPA: printf("variable name cannot have white spaces\n"); break;
+		case ER_EXC_LEN: printf("variable name cannot have length greater than %d\n", VAR_LENGTH - 1); break;
+		case ER_USE_LOOP: printf("let cannot be used in loops or conditions\n"); break;
+		case ER_USE_CHAIN: printf("let cannot be used in chained statements\n"); break;
 	}
 	printf("         |\n");
 	return;
@@ -485,10 +488,16 @@ char lexeLet (PSTAT *info, int *finger) {
 			return EXITCHAR;
 		}
 		(*finger)++;
+		if (info->string[*finger] == ' ') (*finger)++;
 		return lexeLet(info, finger);
 	}
-	else if (info->string[*finger] == '\n' ||
-		info->string[*finger] == ';') return recycle(info, finger);
+	else if (info->string[*finger] == '\n') {
+		printError02(info, ER_USE_LOOP);
+		return NOISSUE;
+	} else if (info->string[*finger] == ';') {
+		printError02(info, ER_USE_CHAIN);
+		return NOISSUE;
+	}
 	else return parser(info);
 }
 
@@ -514,8 +523,9 @@ void printErrorPut(PSTAT *info, int type) {
 }
 
 char lexePut (PSTAT *info, int *finger) {
-	int mergeNeeded = 0, shouldReturn = 0;
+	int mergeNeeded = 0, shouldReturn = 0, backSlashCount = 0;
 	do {
+		backSlashCount = (info->string[*finger] == '\\' ? backSlashCount + 1 : 0);
 		if (info->string[*finger] == ' ' ||
 			info->string[*finger] == '[' ||
 			info->string[*finger] == ']' ||
@@ -530,7 +540,8 @@ char lexePut (PSTAT *info, int *finger) {
 			(*finger)++;
 			int startPoint = *finger;
 			int infLoop = 0;
-			while (!infLoop && (info->string[*finger] != '"' || info->string[*finger - 1] == '\\')) {
+			while (!infLoop && 
+				(info->string[*finger] != '"' || backSlashCount % 2 != 0)) {
 				(*finger)++;
 				if (!checkCondition(info, finger)) {
 					printErrorPut(info, ER_UNCLOSED_PAIR);
@@ -859,7 +870,7 @@ char lexeExpression (PSTAT *info, int *finger) {
 
 typedef struct {
 	char prog;
-	int value;
+	VAR number;
 	int isString;
 	int start;
 	int end;
@@ -880,7 +891,9 @@ RES dvd(PSTAT *, RES, RES);
 char parser (PSTAT *info) {
 	int tokenIndex = 0;
 	RES init;
-	init.value = 0;
+	init.number.value = 0;
+	init.number.inf = 0;
+	init.number.nan = 0;
 	init.isString = 0;
 	while (tokenIndex < info->noOfTokens) {
 		init.start = tokenIndex;
@@ -914,13 +927,20 @@ RES recursiveParser (PSTAT *info, RES postres) {
 		postres.isString = 0;
 		switch (info->tokenArr[postres.start].token){
 			case VARIABLE: 
-				postres.value = info->tokenArr[postres.start].var->value;
+				postres.number.value = info->tokenArr[postres.start].var->value;
+				postres.number.inf = info->tokenArr[postres.start].var->inf;
+				postres.number.nan = info->tokenArr[postres.start].var->nan;
 				return postres;
 			case CONSTANT:
-				postres.value = info->tokenArr[postres.start].constVal;
+				postres.number.value = info->tokenArr[postres.start].constVal;
+				postres.number.inf = 0;
+				postres.number.nan = 0;
 				return postres;
 			case STRING:
 				postres.isString = 1;
+				return postres;
+			case STP:
+				postres.prog = EXITCHAR;
 				return postres;
 		}
 	}
@@ -985,7 +1005,19 @@ RES recursiveParser (PSTAT *info, RES postres) {
 //for multiple stmts per single line
 
 RES asn (PSTAT *info, RES lhs, RES rhs) {
-	info->tokenArr[lhs.start].var->value = rhs.value;
+	if (rhs.number.inf) {	
+		info->tokenArr[lhs.start].var->value = 0;
+		info->tokenArr[lhs.start].var->inf = 1;
+		info->tokenArr[lhs.start].var->nan = 0;
+	} else if (rhs.number.nan) {
+		info->tokenArr[lhs.start].var->value = 0;
+		info->tokenArr[lhs.start].var->nan = 1;
+		info->tokenArr[lhs.start].var->inf = 0;
+	} else {
+		info->tokenArr[lhs.start].var->value = rhs.number.value;
+		info->tokenArr[lhs.start].var->nan = 0;
+		info->tokenArr[lhs.start].var->inf = 0;
+	}
 	RES result;
 	result.prog = NOISSUE;
 	return result;
@@ -994,7 +1026,19 @@ RES asn (PSTAT *info, RES lhs, RES rhs) {
 RES add (PSTAT *info, RES lhs, RES rhs) {
 	RES result;
 	result.prog = NOISSUE;
-	result.value = lhs.value + rhs.value;
+	if (lhs.number.nan || rhs.number.nan) {
+		result.number.value = 0;
+		result.number.nan = 1;
+		result.number.inf = 0;
+	} else if (lhs.number.inf || rhs.number.inf) {
+		result.number.value = 0;
+		result.number.inf = 1;
+		result.number.nan = 0;
+	} else {
+		result.number.value = lhs.number.value + rhs.number.value;
+		result.number.inf = 0;
+		result.number.nan = 0;
+	}
 	result.isString = 0;
 	return result;
 }
@@ -1002,7 +1046,21 @@ RES add (PSTAT *info, RES lhs, RES rhs) {
 RES sub (PSTAT *info, RES lhs, RES rhs) {
 	RES result;
 	result.prog = NOISSUE;
-	result.value = lhs.value - rhs.value;
+	if (lhs.number.nan || rhs.number.nan) {
+		result.number.value = 0;
+		result.number.nan = 1;
+		result.number.inf = 0;
+	}
+	else if (lhs.number.inf || rhs.number.inf) {
+		result.number.value = 0;
+		result.number.inf = 1;
+		result.number.nan = 0;
+	}
+	else{
+		result.number.value = lhs.number.value - rhs.number.value;
+		result.number.inf = 0;
+		result.number.nan = 0;
+	}
 	result.isString = 0;
 	return result;
 }
@@ -1010,7 +1068,21 @@ RES sub (PSTAT *info, RES lhs, RES rhs) {
 RES mlt (PSTAT *info, RES lhs, RES rhs) {
 	RES result;
 	result.prog = NOISSUE;
-	result.value = lhs.value * rhs.value;
+	if (lhs.number.nan || rhs.number.nan) {
+		result.number.value = 0;
+		result.number.nan = 1;
+		result.number.inf = 0;
+	}
+	else if (lhs.number.inf || rhs.number.inf) {
+		result.number.value = 0;
+		result.number.inf = 1;
+		result.number.nan = 0;
+	}
+	else {
+		result.number.value = lhs.number.value * rhs.number.value;
+		result.number.inf = 0;
+		result.number.nan = 0;
+	}
 	result.isString = 0;
 	return result;
 }
@@ -1018,7 +1090,33 @@ RES mlt (PSTAT *info, RES lhs, RES rhs) {
 RES dvd (PSTAT *info, RES lhs, RES rhs) {
 	RES result;
 	result.prog = NOISSUE;
-	result.value = lhs.value / rhs.value;
+	if (lhs.number.nan || rhs.number.nan) {
+		result.number.value = 0;
+		result.number.nan = 1;
+		result.number.inf = 0;
+	}
+	else if (lhs.number.inf || rhs.number.inf) {
+		result.number.value = 0;
+		result.number.inf = 1;
+		result.number.nan = 0;
+	}
+	else {
+		if (rhs.number.value == 0 && lhs.number.value == 0) {
+			result.number.value = 0;
+			result.number.nan = 1;
+			result.number.inf = 0;
+			return result;
+		} else if (rhs.number.value == 0 && lhs.number.value != 0) {
+			result.number.value = 0;
+			result.number.inf = 1;
+			result.number.nan = 0;
+			return result;
+		} else {
+			result.number.value = lhs.number.value / rhs.number.value;
+			result.number.inf = 0;
+			result.number.nan = 0;
+		}
+	}
 	result.isString = 0;
 	return result;
 }
@@ -1031,6 +1129,8 @@ RES let (PSTAT *info, RES references) {
 	}
 	info->varTable[info->noOfVars].name[index] = '\0';
 	info->varTable[info->noOfVars].value = 0;
+	info->varTable[info->noOfVars].inf = 0;
+	info->varTable[info->noOfVars].nan = 0;
 	info->noOfVars++;
 
 	if (info->noOfVars >= info->varTableCap-1) {
@@ -1048,18 +1148,16 @@ RES let (PSTAT *info, RES references) {
 RES get (PSTAT *info, RES references) {
 	int newVal;
 	int error = scanf("%d", &newVal);
-	if (error == EOF) return references;
-	if (error == 0) {
-		while (getchar() != '\n');
-		return references;
-	}
+	if (error == 0) newVal = 0;
+	while (getchar() != '\n');
 	info->tokenArr[references.start].var->value = newVal;
+	if (error == 0) info->tokenArr[references.start].var->nan = 1;
 	return references;
 }
 
 RES kill (PSTAT *info, RES references) {
 	int i = 0;
-	while (info->tokenArr[references.start].var->name == info->varTable[i].name) i++;
+	while (strcmp (info->tokenArr[references.start].var->name, info->varTable[i].name)) i++;
 	for (int x = i; x < info->noOfVars - 1; x++) {
 		info->varTable[x] = info->varTable[x + 1];
 	}
@@ -1074,19 +1172,26 @@ RES put (PSTAT *info, RES references) {
 			if (info->string[y] == '\\') {
 				y++;
 				switch (info->string[y]) {
-					case 'n': printf("\n"); break;
-					case 't': printf("\t"); break;
-					case '\'': printf("\'"); break;
-					case '\"': printf("\""); break;
-					case '\\': printf("\\"); break;
-					case '0': printf("\0"); break;
+					case 'n': printf("\n"); break; //new line character
+					case 't': printf("\t"); break; //tab character
+					case '\'': printf("\'"); break; //single quote character
+					case '\"': printf("\""); break; //double quote character
+					case '\\': printf("\\"); break; //backslash character
+					case '0': printf("\0"); break; //null character
+					case 'r': printf("\r"); break; //carriage return character
+					case 'b': printf("\b"); break; //backspace character
+					case 'f': printf("\f"); break; //form feed character
+					case 'v': printf("\v"); break; //vertical tab character
+					case 'a': printf("\a"); break; //alert (bell) character
 					default: y--;
 				}
 			}
 			else printf("%c", info->string[y]);
 		}
 	} else if (info->tokenArr[x].token == VARIABLE) {
-		printf("%d", info->tokenArr[x].var->value);
+		if (info->tokenArr[x].var->inf) printf("Infinity");
+		else if (info->tokenArr[x].var->nan) printf("NaN");
+		else printf("%d", info->tokenArr[x].var->value);
 	}
 	return references;
 }
