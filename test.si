@@ -1,5 +1,21 @@
-let x
-x = 10
-put x, "\n"
-get x
-put x, "\n"
+put "welcome to this testing session\n\n"
+
+let a, b, c
+
+put "enter a value for a: "; get a
+put "enter a value for b: "; get b
+put "enter a value for c: "; get c
+
+if a == 0 {
+	put "a is zero \n"
+}
+
+if b < c & a {
+	put "b is less than c \n"
+	if b == 0 {
+		put "b is zero \n"
+		put "c is positive \n"
+	}
+} elif {
+	put "this is wonderful \n"
+}
