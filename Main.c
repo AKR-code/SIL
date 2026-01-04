@@ -16,7 +16,7 @@ typedef enum {
 	DVD, MLT, SUB, ADD,							 	//Explicit arthematic operators
 	EQL, NTE, LES, GRT, LOE, GOE,					//Explicit relational operators
 	AND, ORR, NOT,										//Explicit Short circuit operators
-	VARIABLE, STRING, CONSTANT, END_STMT,
+	VARIABLE, STRING, CONSTANT, END_STMT, GRD,
 	TOTAL_TOKENS
 } TOKEN_VAL;
 
@@ -171,7 +171,7 @@ char reader(FILE *inputLoc, PSTAT *info) {
 
 	do {
 		comment = (!doubleQuote && c == '@' ? !comment : comment);
-		firstChar = (firstChar || (c != ' ' && c != '\t' && c != '@' && !comment) ? 1 : 0);
+		firstChar = (firstChar || (c != EOF && c != ' ' && c != '\t' && c != '@' && !comment) ? 1 : 0);
 		doubleQuote = (c == '"' && info->string[index-1] != '\\' ? !doubleQuote : doubleQuote);
 		if (!firstChar || (!doubleQuote && (comment || c == '@'))) goto NEXT_CHAR;
 
@@ -234,9 +234,9 @@ int checkCondition (PSTAT *, int *);
 int checkVar (PSTAT *, int *);
 void printError01 (PSTAT *);
 char reportTrash (PSTAT *, int *);
-char lexeExpression (PSTAT *, int *);
+char lexeExpression (PSTAT *, int *, int *);
 char lexeNumber (PSTAT *, int *);
-char lexeCondition (PSTAT *, TOKEN [], int *, int);
+char lexeCondition (PSTAT *, TOKEN [], int *, int, int *);
 
 #define INIT_BUFF_SIZE 32
 #define INIT_STRING_SIZE 64
@@ -290,7 +290,7 @@ char lexer (PSTAT *info) {
 		{"if", 10}, {"} elif", 10}, {"for", 10}, {"while", 10}, {"}", 10}, {"=", 20}, 					 //functions
 		{"/", 90}, {"*", 90}, {"-", 70}, {"+", 70},//arthematic operators
 		{"==", 55}, {"!=", 55}, {"<", 50}, {">", 50}, {"<=", 50}, {">=", 50},//relational operators
-		{"&", 40}, {"|", 30}, {"!", 80}  //shortcircuit operators
+		{"&", 40}, {"|", 30}, {"!", 20}  //shortcircuit operators
 	};
 
 	info->lineNum++;
@@ -362,7 +362,6 @@ RE_LEXE:
 
 	if (lexerMode == -1) {
 		//-----------------------------------------------------------------------------------
-		printf("[debug] caught in line 362\n");
 		printError01(info);
 		return NOISSUE;
 	}
@@ -664,7 +663,8 @@ char lexePut (PSTAT *info, int *finger) {
 				printErrorPut(info, ER_WANT_MRG);
 				shouldReturn = 1;
 			}
-			char stat = lexeExpression (info, finger);
+			int load = 0;
+			char stat = lexeExpression (info, finger, &load);
 			if (stat == EXITCHAR) return EXITCHAR;
 			else if (stat == NOISSUE) return NOISSUE;
 			mergeNeeded = 1;
@@ -684,7 +684,7 @@ char lexePut (PSTAT *info, int *finger) {
 \************************************/
 
 typedef enum {
-	EXP_BLOCK, OPT_UNEXPECTED, OPT_NEEDED
+	EXP_BLOCK, OPT_UNEXPECTED, OPT_NEEDED, MISSING_GDR
 } ER_CON;
 
 typedef enum {
@@ -713,7 +713,7 @@ void printErrorCon (PSTAT *info, int type, int caller) {
 					printf("         | }\n");
 					break;	
 				case CALLER_TIL:
-					printf("         | while <condition> {\n");
+					printf("         | while <condition> : <maximum iterations> {\n");
 					printf("         |     <statements>\n");
 					printf("         | }\n");
 					break;
@@ -722,18 +722,20 @@ void printErrorCon (PSTAT *info, int type, int caller) {
 
 		case OPT_UNEXPECTED: printf("operator is not expected without an expression\n"); break;
 		case OPT_NEEDED: printf("operator is expected between two expressions\n"); break;
+		case MISSING_GDR: printf("missing guardrail ':' after condition in while loop\n"); break;
 	}
 	printf("         |\n");
 	return;
 }
 
 char lexeIf (PSTAT *info, TOKEN tokenTable[], int *finger) {
+	int load = 0;
 	if (info->string[*finger] == ' ') (*finger)++;
 	if (info->string[*finger] == '{') { //Direct block
 		(*finger)++;
 		return recycle(info, finger);
 	}
-	char status = lexeCondition(info, tokenTable, finger, CALLER_IF);
+	char status = lexeCondition(info, tokenTable, finger, CALLER_IF, &load);
 	if (status == EXITCHAR) return EXITCHAR;
 	else if (status == NOISSUE) return NOISSUE;
 
@@ -749,11 +751,58 @@ char lexeIf (PSTAT *info, TOKEN tokenTable[], int *finger) {
 }
 
 char lexeFor (PSTAT *info, TOKEN tokenTable[], int *finger) {
-	return parser(info);
+	int load = 0;
+	char status = lexeExpression(info, finger, &load);
+	if (status == EXITCHAR) return EXITCHAR;
+	else if (status == NOISSUE) return NOISSUE;
+	
+	(*finger)++;
+	if (info->string[*finger] == '\n' ||
+		info->string[*finger] == ';') {
+		return recycle(info, finger);
+	}
+	else if (info->string[*finger] == '\0') {
+		printErrorCon(info, EXP_BLOCK, CALLER_FOR);
+		return NOISSUE;
+	}
 }
 
 char lexeTill (PSTAT *info, TOKEN tokenTable[], int *finger) {
-	return parser(info);
+	int load = 0;
+	if (info->string[*finger] == ' ') (*finger)++;
+	char status = lexeCondition(info, tokenTable, finger, CALLER_TIL, &load);
+	if (status == EXITCHAR) return EXITCHAR;
+	else if (status == NOISSUE) return NOISSUE;
+
+	if (info->string[*finger] == ' ') (*finger)++;
+	// Gaurdrails for preventing infinite loops
+	if (info->string[*finger] != ':') {
+		printErrorCon(info, MISSING_GDR, CALLER_TIL);
+		return NOISSUE;
+	} else {
+		TOKEN_ARR temp;
+		temp.token = GRD;
+		temp.index = 0;
+		temp.length = 0;
+		temp.var = NULL;
+		if (!pushToken(&temp, info)) {
+			printf("UNKNOWN ERROR 12: failed to allocate memory to a built in data structure");
+			return EXITCHAR;
+		}
+		(*finger)++;
+	}
+	int grdLoad = 0;
+	char stat = lexeExpression(info, finger, &grdLoad);
+	if (stat == EXITCHAR) return EXITCHAR;
+	else if (stat == NOISSUE) return NOISSUE;
+	(*finger)++;
+	if (info->string[*finger] == '\n' ||
+		info->string[*finger] == ';') {
+		return recycle(info, finger);
+	} else if (info->string[*finger] == '\0') {
+		printErrorCon(info, EXP_BLOCK, CALLER_TIL);
+		return NOISSUE;
+	}
 }
 
 typedef enum {
@@ -794,7 +843,8 @@ char lexeAsn (PSTAT *info, TOKEN tokenTable[], int *finger) {
 		return EXITCHAR;
 	}
 	(*finger)++;
-	char status = lexeExpression(info, finger);
+	int load = 0;
+	char status = lexeExpression(info, finger, &load);
 	if (status == EXITCHAR) return EXITCHAR;
 	else if (status == NOISSUE) return NOISSUE;
 
@@ -926,16 +976,20 @@ char lexeNumber (PSTAT *info, int *finger) {
 	return CONTCHAR;
 }
 
-char lexeExpression (PSTAT *info, int *finger) {
-	int operator = 0, load = 0, shouldReturn = 0;
+char lexeExpression (PSTAT *info, int *finger, int *load) {
+	int operator = 0, shouldReturn = 0;
+	int initialLoad = *load;  // Remember starting load level
 	do {
 		if (info->string[*finger] == ' ') {}
-		else if (info->string[*finger] == '(') load += 1000;
+		else if (info->string[*finger] == '(') (*load) += 1000;
 		else if (info->string[*finger] == ')') {
-			load -= 1000;
-			if (load < 0) {
-				printErrorAsn(info, TOO_MANY_CLO);
-				shouldReturn = 1;
+			// Only process ) if it closes a ( that WE opened
+			if ((*load) > initialLoad) {
+				(*load) -= 1000;
+				// Continue parsing, don't break
+			} else {
+				// This ) doesn't belong to us, stop here
+				break;
 			}
 		} else if (info->string[*finger] >= '0' &&
 				   info->string[*finger] <= '9') {
@@ -972,19 +1026,19 @@ char lexeExpression (PSTAT *info, int *finger) {
 			switch (buffer) {
 				case '+': 
 					temp.token = ADD; 
-					temp.weight = 70 + load;
+					temp.weight = 70 + (*load);
 					break; 
 				case '-': 
 					temp.token = SUB;
-					temp.weight = 70 + load;
+					temp.weight = 70 + (*load);
 					break;
 				case '*': 
 					temp.token = MLT;
-					temp.weight = 90 + load;
+					temp.weight = 90 + (*load);
 					break;
 				case '/': 
 					temp.token = DVD; 
-					temp.weight = 90 + load;
+					temp.weight = 90 + (*load);
 					break;
 			}
 			if (!pushToken(&temp, info)) {
@@ -992,23 +1046,39 @@ char lexeExpression (PSTAT *info, int *finger) {
 				return EXITCHAR;
 			}
 			operator = 0;
+		} else if (info->string[*finger] == '<' ||
+			  info->string[*finger] == '=' ||
+			  info->string[*finger] == '>' ||
+			  info->string[*finger] == '&' ||
+			  info->string[*finger] == '|' ||
+			  info->string[*finger] == '!') {
+			// These are comparison/logic operators - we don't handle them in arithmetic expressions
+			// Stop here if we're not inside parens opened by us
+			if ((*load) <= initialLoad) {
+				break;
+			}
+			// If inside parens, this shouldn't happen - it means the condition was passed to us
+			// This means lexeCondition or another caller is in an invalid state
+			printError01(info);
+			return NOISSUE;
 		} else {
 			//-----------------------------------------------------------------------------------
-			printf("[debug] caught in line 988\n");
 			printError01(info);
 			return NOISSUE;
 		}
 		(*finger)++;
 	} while (checkCondition(info, finger) &&
+			 info->string[*finger] != ':' &&
 			 info->string[*finger] != ',' &&
 			 info->string[*finger] != '{' &&
-			 info->string[*finger] != '<' &&
-			 info->string[*finger] != '=' &&
-			 info->string[*finger] != '>' &&
-			 info->string[*finger] != '&' &&
-			 info->string[*finger] != '|' &&
-			 info->string[*finger] != '!');
-	if (load != 0 && load > 0) {
+			 ((*load > initialLoad) || 
+			  (info->string[*finger] != '<' &&
+			   info->string[*finger] != '=' &&
+			   info->string[*finger] != '>' &&
+			   info->string[*finger] != '&' &&
+			   info->string[*finger] != '|' &&
+			   info->string[*finger] != '!')));
+	if ((*load) != initialLoad && (*load) > initialLoad) {
 		printErrorAsn(info, PAIR_CLO_ER);
 		return NOISSUE;
 	} 
@@ -1016,7 +1086,7 @@ char lexeExpression (PSTAT *info, int *finger) {
 	return CONTCHAR;
 }
 
-char lexeCondition (PSTAT *info, TOKEN tokenTable[], int *finger, int caller) {
+char lexeCondition (PSTAT *info, TOKEN tokenTable[], int *finger, int caller, int *load) {
 	int comparision = 0, shouldReturn = 0;
 	do {
 		if (info->string[*finger] == ' ') {
@@ -1025,7 +1095,9 @@ char lexeCondition (PSTAT *info, TOKEN tokenTable[], int *finger, int caller) {
 			info->string[*finger] == '>' ||
 			info->string[*finger] == '=' ||
 			info->string[*finger] == '!') {
-			if (!comparision) {
+			if (!comparision && 
+				info->string[*finger] != '!' &&
+				info->string[*finger + 1] == '=') {
 				printErrorCon(info, OPT_UNEXPECTED, caller);
 				shouldReturn = 1;
 			}
@@ -1033,11 +1105,13 @@ char lexeCondition (PSTAT *info, TOKEN tokenTable[], int *finger, int caller) {
 			char buffer[3];
 			buffer[0] = info->string[*finger];
 			(*finger)++;
-			if (info->string[*finger] != ' ' ) { 
+			if (info->string[*finger] == '=' ) { 
 				buffer[1] = info->string[*finger];
 				buffer[2] = '\0';
+			} else {
+				buffer[1] = '\0';
+				(*finger)--;  // Move back since the next char is not part of the operator
 			}
-			else buffer[1] = '\0';
 			TOKEN_ARR temp;
 			int matched = 0;
 			for (int x = EQL; x <= NOT; x++) {
@@ -1058,6 +1132,16 @@ char lexeCondition (PSTAT *info, TOKEN tokenTable[], int *finger, int caller) {
 				printErrorCon(info, OPT_UNEXPECTED, caller);
 				shouldReturn = 1;
 			}
+		} else if (info->string[*finger] == '(') {
+			// Recursively parse grouped condition
+			(*load) += 1000;
+		} else if (info->string[*finger] == ')') {
+			// Close grouped condition
+			(*load) -= 1000;
+			if ((*load) < 0) {
+				printErrorCon(info, TOO_MANY_CLO, caller);
+				shouldReturn = 1;
+			}
 		} else if (checkVar(info, finger)) {
 			if (comparision) {
 				printErrorCon(info, OPT_NEEDED, caller);
@@ -1065,24 +1149,45 @@ char lexeCondition (PSTAT *info, TOKEN tokenTable[], int *finger, int caller) {
 			}
 			comparision = 1;
 			char status;
-			status = lexeExpression(info, finger);
+			status = lexeExpression(info, finger, load);
 			if (status == EXITCHAR) return EXITCHAR;
 			else if (status == NOISSUE) shouldReturn = 1;
 			continue;
+		} else if (*load > 0 && (info->string[*finger] == '&' || info->string[*finger] == '|')) {
+			// Inside parentheses, & and | are parsed as tokens (not as recursive split)
+			TOKEN_ARR temp;
+			switch (info->string[*finger]) {
+				case '&':
+					temp.token = AND;
+					temp.weight = 40;
+					break;
+				case '|':
+					temp.token = ORR;
+					temp.weight = 30;
+					break;
+			}
+			temp.index = 0;
+			temp.length = 0;
+			temp.var = NULL;
+			if (!pushToken(&temp, info)) {
+				printf("UNKNOWN ERROR 13");
+				return EXITCHAR;
+			}
+			comparision = 0;
 		} else {
 			//-----------------------------------------------------------------------------------
-			printf("[debug] caught in line 1064\n");
 			printError01(info);
 			shouldReturn = 1;
 		}
 		(*finger)++;
 	} while (checkCondition(info, finger) &&
+			 info->string[*finger] != ':' &&
 			 info->string[*finger] != '{' &&
-			 (info->string[*finger] != '&' &&
-			  info->string[*finger] != '|'));
+			 ((*load) > 0 || (info->string[*finger] != '&' &&
+			  info->string[*finger] != '|')));
 
-	if (info->string[*finger] == '&' ||
-		info->string[*finger] == '|') {
+	if (*load == 0 && (info->string[*finger] == '&' ||
+		info->string[*finger] == '|')) {
 		char buffer = info->string[*finger];
 		TOKEN_ARR temp;
 		switch (buffer) {
@@ -1100,11 +1205,15 @@ char lexeCondition (PSTAT *info, TOKEN tokenTable[], int *finger, int caller) {
 			return EXITCHAR;
 		}
 		(*finger)++;
-		char status = lexeCondition(info, tokenTable, finger, caller);
+		char status = lexeCondition(info, tokenTable, finger, caller, load);
 		if (status == EXITCHAR) return EXITCHAR;
 		else if (status == NOISSUE) shouldReturn = 1;
-	} else if (info->string[*finger] != '{') {
+	} else if (caller != CALLER_TIL && info->string[*finger] != '{') {
 		printErrorCon(info, EXP_BLOCK, caller);
+		shouldReturn = 1;
+	}
+	if (*load != 0) {
+		printErrorCon(info, PAIR_CLO_ER, caller);
 		shouldReturn = 1;
 	}
 	if (shouldReturn) {
@@ -1147,6 +1256,8 @@ RES orr(PSTAT *, RES, RES);
 RES not(PSTAT *, RES);
 
 char parseIf(PSTAT *, int *);
+char parseFor(PSTAT *, int *);
+char parseTill(PSTAT *, int *);
 
 void debugLog (PSTAT *info, RES init) {
 	printf("               +------+----------+-------------+\n");
@@ -1194,12 +1305,29 @@ void debugLog (PSTAT *info, RES init) {
 	}
 }
 
-char parseCaller(PSTAT * info, RES init, int *tokenIndex) {
-	if (info->tokenArr[*tokenIndex].token == ELCON) {
-	}
+char parseDB(PSTAT * info, int *tokenIndex) {
 	while (*tokenIndex < info->noOfTokens &&
-		   info->tokenArr[*tokenIndex].token != ELCON &&
-		   info->tokenArr[*tokenIndex].token != END_BLOCK) {
+		   info->tokenArr[*tokenIndex].token != END_BLOCK &&
+		   info->tokenArr[*tokenIndex].token != ELCON) {
+		RES init;
+		init.number.value = 0;
+		init.number.inf = 0;
+		init.number.nan = 0;
+		init.isString = 0;
+		if (info->tokenArr[*tokenIndex].token == CON){
+			char status = parseIf(info, tokenIndex);
+			if (status == EXITCHAR) return EXITCHAR;
+			continue;
+		} else if (info->tokenArr[*tokenIndex].token == FOR) {
+			char status = parseFor(info, tokenIndex);
+			if (status == EXITCHAR) return EXITCHAR;
+			continue;
+		} else if (info->tokenArr[*tokenIndex].token == TIL){
+			char status = parseTill(info, tokenIndex);
+			if (status == EXITCHAR)
+				return EXITCHAR;
+			continue;
+		}
 		init.start = *tokenIndex;
 		while (*tokenIndex < info->noOfTokens && 
 				info->tokenArr[*tokenIndex].token != END_STMT) {
@@ -1207,24 +1335,9 @@ char parseCaller(PSTAT * info, RES init, int *tokenIndex) {
 		}
 		init.end = *tokenIndex;
 		if (*tokenIndex < info->noOfTokens) (*tokenIndex)++;
+		if (init.start >= init.end) continue;
 		init = recursiveParser(info, init);
 		if (init.prog == EXITCHAR) return EXITCHAR;
-	}
-	return NOISSUE;
-}
-
-char parseDB(PSTAT *info, int *tokenIndex) {
-	RES init;
-	init.number.value = 0;
-	init.number.inf = 0;
-	init.number.nan = 0;
-	init.isString = 0;
-	if (info->tokenArr[*tokenIndex].token == CON){
-		char status = parseIf(info, tokenIndex);
-		if (status == EXITCHAR) return EXITCHAR;
-	} else {
-		char status = parseCaller(info, init, tokenIndex);
-		if (status == EXITCHAR) return EXITCHAR;
 	}
 	return NOISSUE;
 }
@@ -1238,9 +1351,8 @@ char eval (PSTAT *info, int *tokenIndex) {
 	init.isString = 0;
 	init.start = *tokenIndex;
 	while (info->tokenArr[*tokenIndex].token != END_STMT &&
-		   *tokenIndex < info->noOfTokens) {
-		(*tokenIndex)++;
-	}
+		   info->tokenArr[*tokenIndex].token != GRD &&
+		   *tokenIndex < info->noOfTokens) (*tokenIndex)++;
 	init.end = *tokenIndex;
 	if (init.start == init.end) {
 		(*tokenIndex)++;
@@ -1254,8 +1366,8 @@ char eval (PSTAT *info, int *tokenIndex) {
 }
 
 //jumpBlock function
-void jumpBlock (PSTAT *info, int *tokenIndex) {
-	int openBraces = 0;
+void jumpBlock (PSTAT *info, int *tokenIndex, int openBraces) {
+	int initialDepth = openBraces;  // Remember starting depth
 	do {
 		if (info->tokenArr[*tokenIndex].token == CON) {
 			openBraces++;
@@ -1263,7 +1375,8 @@ void jumpBlock (PSTAT *info, int *tokenIndex) {
 			openBraces--;
 		}
 		(*tokenIndex)++;
-	} while ((info->tokenArr[*tokenIndex].token != ELCON || openBraces > 0) &&
+	} while ( (info->tokenArr[*tokenIndex].token != END_BLOCK || openBraces > initialDepth) &&
+		(info->tokenArr[*tokenIndex].token != ELCON || openBraces > initialDepth) &&
 	 	*tokenIndex < info->noOfTokens);
 	return;
 }
@@ -1277,12 +1390,78 @@ char parseIf (PSTAT *info, int *tokenIndex) {
 		//forward to parseDB again
 		char status = parseDB(info, tokenIndex);
 		if (status == EXITCHAR) return EXITCHAR;
+		if (info->tokenArr[*tokenIndex].token != END_BLOCK) {
+			// jump the rest of the if-elif-else block
+			jumpBlock(info, tokenIndex, 1);
+		}
 	} else if (booleanVal == FALSE) {
 		//call jump function
-		jumpBlock(info, tokenIndex);
+		jumpBlock(info, tokenIndex, 0);
 		//call parseIf recursively for elif/else
-		char status = parseIf(info, tokenIndex);
-		if (status == EXITCHAR) return EXITCHAR;	
+		if (info->tokenArr[*tokenIndex].token == ELCON) {
+			char status = parseIf(info, tokenIndex);
+			if (status == EXITCHAR) return EXITCHAR;
+		}
+	}
+	if (info->tokenArr[*tokenIndex].token == END_BLOCK) (*tokenIndex)++;
+	return NOISSUE;
+}
+
+char parseFor (PSTAT *info, int *tokenIndex) {
+	(*tokenIndex)++;
+	RES loopVarRes;
+	loopVarRes.start = *tokenIndex;
+	while (info->tokenArr[*tokenIndex].token != END_STMT &&
+		   *tokenIndex < info->noOfTokens) {
+		(*tokenIndex)++;
+	}
+	loopVarRes.end = *tokenIndex;
+	loopVarRes = recursiveParser(info, loopVarRes);
+	if (loopVarRes.prog == EXITCHAR) return EXITCHAR;
+	int loopThrough = *tokenIndex;
+	for (int i = 0; i < loopVarRes.number.value; i++) {
+		*tokenIndex = loopThrough;
+		char status = parseDB(info, tokenIndex);
+		if (status == EXITCHAR) return EXITCHAR;
+	} // to skip the block when false at initial evaluation
+	if (loopVarRes.number.value == 0) {
+		jumpBlock(info, tokenIndex, 1);
+		(*tokenIndex)++;
+	}
+	return NOISSUE;
+}
+
+char parseTill (PSTAT *info, int *tokenIndex) {
+	(*tokenIndex)++;
+	int conditionAt = *tokenIndex;
+	int copy = conditionAt;
+	char booleanVal = eval(info, tokenIndex);
+
+	if (booleanVal == EXITCHAR) return EXITCHAR;
+	if (booleanVal == FALSE) {
+		//initial condition is false, so we need to jump the whole block
+		jumpBlock(info, tokenIndex, 0);
+		(*tokenIndex)++;
+		return NOISSUE;
+	}
+	RES maxIterRes;
+	maxIterRes.start = *tokenIndex;
+	while (info->tokenArr[*tokenIndex].token != END_STMT &&
+		   *tokenIndex < info->noOfTokens) (*tokenIndex)++;
+	maxIterRes.end = *tokenIndex;
+	maxIterRes = recursiveParser(info, maxIterRes);
+	if (maxIterRes.prog == EXITCHAR) return EXITCHAR;
+	(*tokenIndex)++;
+	int loopThrough = *tokenIndex;
+	int iterations = 0;
+	while (booleanVal == TRUE && iterations < maxIterRes.number.value) {
+		*tokenIndex = loopThrough;
+		char status = parseDB(info, tokenIndex);
+		if (status == EXITCHAR) return EXITCHAR;
+		booleanVal = eval(info, &conditionAt);
+		conditionAt = copy;
+		if (booleanVal == EXITCHAR) return EXITCHAR;
+		iterations++;
 	}
 	return NOISSUE;
 }
@@ -1291,7 +1470,10 @@ RES recursiveParser (PSTAT *info, RES postres) {
 	postres.prog = NOISSUE;
 	// rare saftey trigger for abnormal 0 window size case
 	if (postres.start == postres.end) {
-		printf("Abnormal error found by Parser");
+		// Return empty result instead of error - this can happen with certain operator combinations
+		postres.number.value = 0;
+		postres.number.nan = 0;
+		postres.number.inf = 0;
 		return postres;
 	}
 
