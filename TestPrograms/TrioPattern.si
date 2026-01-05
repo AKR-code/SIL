@@ -1,0 +1,23 @@
+put "welcome to this Program (fully written in Structured Integer Language)\n"
+let x
+get x
+
+@Input validation should be done as hieght cannot be negative
+
+if x < 1 {
+	put "INVALID INPUT\n\a" @ '\a' is bell character @
+	stop
+}
+
+let y
+while x > 0 : 10000 {
+	while y < x : 10000 {
+		y = y + 1
+		put y
+	}
+			
+
+	put "\n"
+	y = 0
+	x = x - 1
+}

@@ -1,0 +1,148 @@
+put "welcome to this Program (fully written in Structured Integer Language)\n"
+
+let marks
+let A, B, C, D, E, F, G
+let i, reminder
+while marks != (0 - 1) : 1000 { 
+	i = i + 1
+	reminder = i - (i / 10) * 10
+	put "enter '-1' to exit or ", i
+	if reminder == 1 & i != 11 {
+		put "st student marks: "
+	} elif reminder == 2 & i != 12 {
+		put "nd student marks: "
+	} elif reminder == 3 & i != 13 {
+		put "rd student marks: "
+	} elif {
+		put "th student marks: "
+	}
+	get marks
+
+	if marks > 100 | marks < 0 - 1 { 
+		put "INVALID MARKS\n\a"
+		i = i - 1
+	} elif marks > 90 {
+		A = A + 1
+	} elif marks > 80 {
+		B = B + 1
+	} elif marks > 70 {
+		C = C + 1
+	} elif marks > 60 {
+		D = D + 1
+	} elif marks > 50 {
+		E = E + 1
+	} elif marks > 40 {
+		F = F + 1
+	} elif marks >= 0 {
+		G = G + 1
+	}
+}
+@preprocessing the data
+let max
+if max < A {
+	max = A
+}
+
+if max < B {
+	max = B
+}
+
+if max < C {
+	max = C
+}
+
+if max < D {
+	max = D
+}
+
+if max < E {
+	max = E
+}
+
+if max < F {
+	max = F
+}
+
+if max < G {
+	max = G
+}
+
+put "\n\n"
+put "            Students Grade Analysis Report\n\n"
+put "   +------------------------------------------------+\n"
+put "   |            University of Hyderabad             |\n"
+put "   +------------------------------------------------+\n"
+put "   |  School of Computers and Information Sciences  |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |  Letter Grade  |          Marks Range          |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       A+       |             > 90              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       A        |             > 80              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       B+       |             > 70              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       B        |             > 60              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       C        |             > 50              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       D        |             > 40              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       F        |            <= 40              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |                                                |\n"
+
+let x
+x = max
+for max {
+	put "   "
+	if x <= A {
+		put "|  *      "
+	} elif {
+		put "|         "
+	}
+	if x <= B {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if x <= C {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if x <= D {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if x <= E {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if x <= F {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if x <= G {
+		put "*   |\n"
+	} elif {
+		put "    |\n"
+	}
+	x = x - 1
+}
+
+
+put "   +--+------+------+------+------+------+------+---+\n"
+put "   |  A+     A      B+     B      C      D      F   |\n"
+put "   +------------------------------------------------+\n\n"
+put "      total no.of Students = ", i - 1, "\n"
+put "      no.of A+ Grades = ", A, "\n"
+put "      no.of A Grades = ", B, "\n"
+put "      no.of B+ Grades = ", C, "\n"
+put "      no.of B Grades = ", D, "\n"
+put "      no.of C Grades = ", E, "\n"
+put "      no.of D Grades = ", F, "\n"
+put "      no.of F Grades = ", G, "\n"

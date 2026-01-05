@@ -1,0 +1,57 @@
+put "welcome to this Program (fully written in Structured Integer Language)\n"
+
+put "Enter the size of the butterfly you want to print: "
+let a
+get a
+
+if a < 1 | a - (a / 2) * 2 != 0 {
+	put "INVALID INPUT\a\n"
+	stop
+}
+
+let wing, wingNo
+
+@printing the upper half
+for a - 1 {
+	wing = wing + 1
+	for wing {
+		wingNo = wingNo + 1
+		put wingNo
+	}
+	for 2 * a - 1 - 2 * wing {
+		put " "
+	}
+	for wing {
+		put wingNo
+		wingNo = wingNo - 1
+	}
+	put "\n"
+}
+
+@printing middle line
+for a {
+	wingNo = wingNo + 1
+	put wingNo
+}
+for a - 1 {
+	wingNo = wingNo - 1
+	put wingNo
+}
+put "\n"
+
+@printing bottom half
+for a - 1 {
+	for wing {
+		wingNo = wingNo + 1
+		put wingNo
+	}
+	for 2 * a - 1 - 2 * wing {
+		put " "
+	}
+	for wing {
+		put wingNo
+		wingNo = wingNo - 1
+	}
+	put "\n"
+	wing = wing - 1
+}

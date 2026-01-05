@@ -241,49 +241,6 @@ char lexeCondition (PSTAT *, TOKEN [], int *, int, int *);
 #define INIT_BUFF_SIZE 32
 #define INIT_STRING_SIZE 64
 
-char parserTesting (PSTAT *info) {
-	for (int i = 0; i < info->noOfTokens; i++) {
-		printf("Token %d: ", i);
-		switch (info->tokenArr[i].token) {
-			case STP: printf("STOP\n"); break;
-			case KIL: printf("KILL\n"); break;
-			case LET: printf("LET\n"); break;
-			case PUT: printf("PUT\n"); break;
-			case GET: printf("GET\n"); break;
-			case CON: printf("IF\n"); break;
-			case ELCON: printf("ELIF\n"); break;
-			case FOR: printf("FOR\n"); break;
-			case TIL: printf("WHILE\n"); break;
-			case ASN: printf("ASSIGNMENT\n"); break;
-			case VARIABLE: printf("VARIABLE (%s)\n", info->tokenArr[i].var->name); break;
-			case DVD: printf("DIVIDE\n"); break;
-			case MLT: printf("MULTIPLY\n"); break;
-			case SUB: printf("SUBTRACT\n"); break;
-			case ADD: printf("ADD\n"); break;
-			case EQL: printf("EQUALS\n"); break;
-			case NTE: printf("NOT EQUALS\n"); break;
-			case LES: printf("LESS THAN\n"); break;
-			case GRT: printf("GREATER THAN\n"); break;
-			case LOE: printf("LESS OR EQUALS\n"); break;
-			case GOE: printf("GREATER OR EQUALS\n"); break;
-			case AND: printf("AND\n"); break;
-			case ORR: printf("OR\n"); break;
-			case NOT: printf("NOT\n"); break;
-			case CONSTANT: printf("CONSTANT (%d)\n", info->tokenArr[i].constVal); break;
-			case STRING: 
-				printf("STRING (");
-				for (int j = 0; j < info->tokenArr[i].length; j++) {
-					printf("%c", info->string[info->tokenArr[i].index + j]);
-				}
-				printf(")\n");
-				break;
-			case END_STMT: printf("END OF STATEMENT\n"); break;
-			case END_BLOCK: printf("END OF BLOCK\n"); break;
-			default: printf("OTHER TOKEN\n"); break;
-		}
-	}
-}
-
 char lexer (PSTAT *info) {
 	TOKEN tokenTable[TOTAL_TOKENS] = {
 		{"stop", 0}, {"kill", 10}, {"let", 10}, {"put", 10}, {"get", 10}, 
@@ -359,7 +316,6 @@ RE_LEXE:
 		}
 	}
 
-
 	if (lexerMode == -1) {
 		//-----------------------------------------------------------------------------------
 		printError01(info);
@@ -407,6 +363,8 @@ RE_LEXE:
 	else if (status == LEXE_RECYCLE) {
 		goto RE_LEXE;
 	}
+	printf("Somewhere caught garbage in program status\n");
+	return NOISSUE;
 }
 
 typedef enum {
@@ -740,6 +698,7 @@ char lexeIf (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	else if (status == NOISSUE) return NOISSUE;
 
 	(*finger)++;
+	if (info->string[*finger] == ' ') (*finger)++;
 	if (info->string[*finger] == '\n' ||
 		info->string[*finger] == ';') {
 		return recycle(info, finger);
@@ -748,6 +707,7 @@ char lexeIf (PSTAT *info, TOKEN tokenTable[], int *finger) {
 		printErrorCon(info, EXP_BLOCK, CALLER_IF);
 		return NOISSUE;
 	}
+	return NOISSUE;
 }
 
 char lexeFor (PSTAT *info, TOKEN tokenTable[], int *finger) {
@@ -755,8 +715,9 @@ char lexeFor (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	char status = lexeExpression(info, finger, &load);
 	if (status == EXITCHAR) return EXITCHAR;
 	else if (status == NOISSUE) return NOISSUE;
-	
+
 	(*finger)++;
+	if (info->string[*finger] == ' ') (*finger)++;
 	if (info->string[*finger] == '\n' ||
 		info->string[*finger] == ';') {
 		return recycle(info, finger);
@@ -765,6 +726,7 @@ char lexeFor (PSTAT *info, TOKEN tokenTable[], int *finger) {
 		printErrorCon(info, EXP_BLOCK, CALLER_FOR);
 		return NOISSUE;
 	}
+	return NOISSUE;
 }
 
 char lexeTill (PSTAT *info, TOKEN tokenTable[], int *finger) {
@@ -795,7 +757,9 @@ char lexeTill (PSTAT *info, TOKEN tokenTable[], int *finger) {
 	char stat = lexeExpression(info, finger, &grdLoad);
 	if (stat == EXITCHAR) return EXITCHAR;
 	else if (stat == NOISSUE) return NOISSUE;
+
 	(*finger)++;
+	while (info->string[*finger] == ' ') (*finger)++;
 	if (info->string[*finger] == '\n' ||
 		info->string[*finger] == ';') {
 		return recycle(info, finger);
@@ -803,6 +767,7 @@ char lexeTill (PSTAT *info, TOKEN tokenTable[], int *finger) {
 		printErrorCon(info, EXP_BLOCK, CALLER_TIL);
 		return NOISSUE;
 	}
+return NOISSUE;
 }
 
 typedef enum {
@@ -938,7 +903,9 @@ char recycle (PSTAT *info, int *finger) {
 		temp.token = END_STMT;
 		pushToken(&temp, info);
 		(*finger)++;
-		if (info->string[*finger] == ' ') (*finger)++;
+		while (info->string[*finger] == ' ') (*finger)++;
+		if (info->string[*finger] == '\0') return parser(info);
+		else if (info->string[*finger] == '\n') return recycle(info, finger);
 		return LEXE_RECYCLE;
 }
 
@@ -1259,52 +1226,6 @@ char parseIf(PSTAT *, int *);
 char parseFor(PSTAT *, int *);
 char parseTill(PSTAT *, int *);
 
-void debugLog (PSTAT *info, RES init) {
-	printf("               +------+----------+-------------+\n");
-	printf("               |%6s|%10s| WINDOW INFO |\n", "si.no", "TOKEN");
-	printf("               +------+----------+-------------+\n");
-	for (int x = 0; x < info->noOfTokens; x++) {
-		printf("               |%6d", x);
-		switch(info->tokenArr[x].token) {
-			case STP: printf("|%10s|", " STP "); break;
-			case KIL: printf("|%10s|", " KIL "); break;
-			case LET: printf("|%10s|", " LET "); break;
-			case PUT: printf("|%10s|", " PUT "); break;
-			case GET: printf("|%10s|", " GET "); break;
-			case CON: printf("|%10s|", " CON "); break;
-			case ELCON: printf("|%10s|", " ELCON "); break;
-			case FOR: printf("|%10s|", " FOR "); break;
-			case TIL: printf("|%10s|", " TIL "); break;
-			case ASN: printf("|%10s|", " ASN "); break;
-			case DVD: printf("|%10s|", " DVD "); break;
-			case MLT: printf("|%10s|", " MLT "); break;
-			case SUB: printf("|%10s|", " SUB "); break;
-			case ADD: printf("|%10s|", " ADD "); break;
-			case EQL: printf("|%10s|", " EQL "); break;
-			case NTE: printf("|%10s|", " NTE "); break;
-			case LES: printf("|%10s|", " LES "); break;
-			case GRT: printf("|%10s|", " GRT "); break;
-			case LOE: printf("|%10s|", " LOE "); break;
-			case GOE: printf("|%10s|", " GOE "); break;
-			case AND: printf("|%10s|", " AND "); break;
-			case ORR: printf("|%10s|", " ORR "); break;
-			case NOT: printf("|%10s|", " NOT "); break;
-			case VARIABLE: printf("|%10s|", " VARIABLE "); break;
-			case STRING: printf("|%10s|", " STRING "); break;
-			case CONSTANT: printf("|%10s|", " CONSTANT "); break;
-			case END_STMT: printf("|%10s|", " END_STMT "); break;
-			case END_BLOCK: printf("|%10s|", " END_BLOCK "); break;
-			default : printf("\a ERROR UNKNOWN TOKEN\n");
-		}
-		if (x >= init.start && x < init.end) {
-			printf(" TO BE PARSED|\n");
-		} else {
-			printf("             |\n");
-		}
-		printf("               +------+----------+-------------+\n");
-	}
-}
-
 char parseDB(PSTAT * info, int *tokenIndex) {
 	while (*tokenIndex < info->noOfTokens &&
 		   info->tokenArr[*tokenIndex].token != END_BLOCK &&
@@ -1366,8 +1287,8 @@ char eval (PSTAT *info, int *tokenIndex) {
 }
 
 //jumpBlock function
-void jumpBlock (PSTAT *info, int *tokenIndex, int openBraces) {
-	int initialDepth = openBraces;  // Remember starting depth
+void jumpBlock (PSTAT *info, int *tokenIndex, int caseType) {
+	int openBraces = 0;  // Remember starting depth
 	do {
 		if (info->tokenArr[*tokenIndex].token == CON) {
 			openBraces++;
@@ -1375,9 +1296,13 @@ void jumpBlock (PSTAT *info, int *tokenIndex, int openBraces) {
 			openBraces--;
 		}
 		(*tokenIndex)++;
-	} while ( (info->tokenArr[*tokenIndex].token != END_BLOCK || openBraces > initialDepth) &&
-		(info->tokenArr[*tokenIndex].token != ELCON || openBraces > initialDepth) &&
-	 	*tokenIndex < info->noOfTokens);
+		if (!caseType && 
+			(openBraces == 0 && info->tokenArr[*tokenIndex].token == ELCON) ||
+		    (openBraces == -1 && info->tokenArr[*tokenIndex].token == END_BLOCK)) break;
+
+		if (caseType &&
+			openBraces == -1) break;
+	} while (*tokenIndex < info->noOfTokens);
 	return;
 }
 
@@ -1428,6 +1353,8 @@ char parseFor (PSTAT *info, int *tokenIndex) {
 		jumpBlock(info, tokenIndex, 1);
 		(*tokenIndex)++;
 	}
+	// to skip the END_BLOCK token
+	if (info->tokenArr[*tokenIndex].token == END_BLOCK) (*tokenIndex)++;
 	return NOISSUE;
 }
 
@@ -1948,6 +1875,7 @@ RES put (PSTAT *info, RES references) {
 /**************************\
 |------ERROR-OUPUTS--------|
 \**************************/
+
 
 void printError01 (PSTAT *info) {
 	printf("         |\n");

@@ -1,0 +1,193 @@
+put "welcome to this Program (fully written in Structured Integer Language)\n"
+
+let marks
+let A, B, C, D, E, F, G
+let i, reminder
+put "\n\n"
+put "            Students Grade Analysis Report\n\n"
+put "   +------------------------------------------------+\n"
+put "   |            University of Hyderabad             |\n"
+put "   +------------------------------------------------+\n"
+put "   |  School of Computers and Information Sciences  |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |  Letter Grade  |          Marks Range          |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       A+       |             > 90              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       A        |             > 80              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       B+       |             > 70              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       B        |             > 60              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       C        |             > 50              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       D        |             > 40              |\n"
+put "   +----------------+-------------------------------+\n"
+put "   |       F        |            <= 40              |\n"
+put "   +----------------+-------------------------------+\n"
+
+if marks != (0 - 1) {
+	put "[DEBUG] should enter into loop \n"
+} elif {
+	put "[DEBUG] there is some problem in sil program"
+}
+
+while marks != (0 - 1) : 1000 { 
+	put "[DEBUG] just entered into the loop\n"
+	i = i + 1
+	@ below is the workaround for modulus function@
+	reminder = i - (i / 10) * i
+	put "enter \"-1\" to exit or enter marks of ", i
+	if reminder == 1 & i != 11 {
+		put "st student: "
+	} elif i == 2 & i != 12 { 
+		put "nd student: "
+	} elif i == 3 & i != 13 {
+		put "rd student: "
+	} elif {
+		put "th student: "
+	}
+	get marks
+
+	if marks > 100 | marks < 0 - 1 {
+		put "INVALID MARKS\n\a"
+		i = i - 1
+	} elif marks > 90 {
+		A = A + 1
+	} elif marks > 80 {
+		B = B + 1
+	} elif marks > 70 {
+		C = C + 1
+	} elif marks > 60 {
+		D = D + 1
+	} elif marks > 50 {
+		E = E + 1
+	} elif marks > 40 {
+		F = F + 1
+	} elif marks >= 0 {
+		G = G + 1
+	}
+	i = i + 1
+}
+
+put "   |                                                |\n"
+
+@preprocessing the data
+let min, max
+min = 100
+
+if min > A {
+	min = A
+}
+
+if min > B {
+	min = B
+}
+
+if min > C {
+	min = C
+}
+
+if min > D {
+	min = D
+}
+
+if min > E {
+	min = E
+}
+
+if min > F {
+	min = A
+}
+
+if min > F {
+	min = F
+}
+
+if max < A {
+	max = A
+}
+
+if max < B {
+	max = B
+}
+
+if max < C {
+	max = C
+}
+
+if max < D {
+	max = D
+}
+
+if max < E {
+	max = E
+}
+
+if max < F {
+	max = F
+}
+
+if max < G {
+	max = G
+}
+
+let ANorm, BNorm, CNorm, DNorm, ENorm, FNorm, GNorm, maxNorm 
+ANorm = ((A - min) * 10) / (max - min)
+BNorm = ((B - min) * 10) / (max - min)
+CNorm = ((C - min) * 10) / (max - min)
+DNorm = ((D - min) * 10) / (max - min)
+ENorm = ((E - min) * 10) / (max - min)
+FNorm = ((F - min) * 10) / (max - min)
+GNorm = ((G - min) * 10) / (max - min)
+maxNorm = ((max - min) * 10) / (max - min)
+
+for maxNorm {
+	if maxNorm <= ANorm {
+		put "|  *      "
+	} elif {
+		put "         "
+	}
+	if maxNorm <= BNorm {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if maxNorm <= CNorm {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if maxNorm <= DNorm {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if maxNorm <= ENorm {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if maxNorm <= FNorm {
+		put "*      "
+	} elif {
+		put "       "
+	}
+	if maxNorm <= GNorm {
+		put "*   |\n"
+	} elif {
+		put "    |\n"
+	}
+}
+
+
+put "   +--+------+------+------+------+------+------+---+\n\n"
+put "      total no.of Students = ", i, "\n"
+put "      no.of A Grades = ", A, "\n"
+put "      no.of B Grades = ", B, "\n"
+put "      no.of C Grades = ", C, "\n"
+put "      no.of D Grades = ", D, "\n"
+put "      no.of E Grades = ", E, "\n"
+put "      no.of F Grades = ", F, "\n"
+put "      no.of G Grades = ", G, "\n"

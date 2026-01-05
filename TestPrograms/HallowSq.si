@@ -1,0 +1,31 @@
+put "welcome to this Program (fully written in Structured Integer Language)\n"
+
+put "Enter the size of the square to generate it: "
+let a
+get a
+
+if a < 1 {
+	put "INVALID INPUT\a\n"
+	stop
+}
+
+@printing top border
+for a {
+	put "*"
+}
+put "\n"
+
+@printing left right borders and niddle space
+for a - 2 {
+	put "*"
+	for a - 2 {
+		put " "
+	}
+	put "*\n"
+}
+
+@printing bottom border
+for a {
+	put "*"
+}
+put "\n"

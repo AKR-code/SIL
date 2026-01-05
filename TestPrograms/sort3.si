@@ -1,0 +1,35 @@
+put "welcome to this Program (fully written in Structured Integer Language)\n"
+put "this program will sort given three numbers in non decreasing order\n"
+
+let x, y, z 
+
+put "enter a value for x: "
+get x
+put "enter a value for y: "
+get y
+put "enter a value for z: "
+get z
+
+if x <= y {
+	if x <= z {
+		if y <= z {
+			put "x: ", x, ", y: ", y, ", z: ", z
+		} elif {
+			put "x: ", x, ", z: ", z, ", y: ", y
+		}
+	} elif {
+		put "z: ", z, ", x: ", x, ", y: ", y
+	}
+} elif {
+	if y <= z {
+		if x <= z {
+			put "y: ", y, ", x: ", x, ", z: ", z
+		} elif {
+			put "y: ", y, ", z: ", z, ", x: ", x
+		}
+	} elif {
+		put "z: ", z, ", y: ", y, ", x: ", x
+	}
+}
+
+put "\n"

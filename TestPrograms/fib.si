@@ -1,0 +1,23 @@
+put "welcome to this Program (fully written in Structured Integer Language)\n"
+let x
+put "enter number of terms of fibonacci sequence you want to print on the screem: "
+get x
+
+if x < 1 {
+	put "INVALID INPUT\n\a"
+	stop
+}
+
+let firstNum @any variable is always initialised to 0 automatically at decleration@
+let secondNum
+let thirdNum
+secondNum = 1; thirdNum = 1;
+
+for x {
+	put firstNum, ", "
+	firstNum = secondNum;
+	secondNum = thirdNum;
+	thirdNum = firstNum + secondNum
+}
+
+put "\b\b  \n"
