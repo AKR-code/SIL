@@ -10,13 +10,11 @@ if x < 1 {
 }
 
 let y
-while x > 0 : 10000 {
-	while y < x : 10000 {
+for x {
+	for x {
 		y = y + 1
 		put y
 	}
-			
-
 	put "\n"
 	y = 0
 	x = x - 1

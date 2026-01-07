@@ -1390,6 +1390,8 @@ char parseTill (PSTAT *info, int *tokenIndex) {
 		if (booleanVal == EXITCHAR) return EXITCHAR;
 		iterations++;
 	}
+	// to skip the END_BLOCK token
+	if (info->tokenArr[*tokenIndex].token == END_BLOCK) (*tokenIndex)++;
 	return NOISSUE;
 }
 
